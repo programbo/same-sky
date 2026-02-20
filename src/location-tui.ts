@@ -4,9 +4,14 @@ import { mainTuiMachine } from "./tui/main-tui.machine";
 import { createInquirerUi } from "./tui/inquirer-ui";
 
 async function run(): Promise<void> {
+  const rawArgs = process.argv.slice(2);
+  const verbose = rawArgs.includes("--verbose");
+  const argv = rawArgs.filter(arg => arg !== "--verbose");
+
   const actor = createActor(mainTuiMachine, {
     input: {
-      argv: process.argv.slice(2),
+      argv,
+      verbose,
       service: createTimeInPlaceService(),
       store: new PersistedLocationStore(),
       ui: createInquirerUi(),

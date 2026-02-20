@@ -3,12 +3,13 @@ import { createActor, waitFor } from "xstate";
 import type {
   LocationMatch,
   PersistLocationInput,
+  PersistLocationPatch,
   PersistedLocation,
   PersistedLocationStoreLike,
   TimeInPlaceService,
 } from "../lib/time-in-place";
 import { mainTuiMachine } from "./main-tui.machine";
-import type { AppFeatureChoice, LocationActionChoice, TuiUi } from "./ui-contract";
+import type { AppFeatureChoice, LocationActionChoice, RefinementActionChoice, TuiUi } from "./ui-contract";
 
 class MemoryStore implements PersistedLocationStoreLike {
   private readonly locations: PersistedLocation[] = [];
@@ -23,6 +24,8 @@ class MemoryStore implements PersistedLocationStoreLike {
       name: input.name,
       coords: input.coords,
       nickname: input.nickname,
+      timezone: input.timezone,
+      granularity: input.granularity,
       createdAtMs: 1_700_000_000_000 + this.locations.length,
     };
 
@@ -39,12 +42,39 @@ class MemoryStore implements PersistedLocationStoreLike {
     const [removed] = this.locations.splice(index, 1);
     return removed ?? null;
   }
+
+  async update(id: string, patch: PersistLocationPatch): Promise<PersistedLocation | null> {
+    const index = this.locations.findIndex(location => location.id === id);
+    if (index < 0) {
+      return null;
+    }
+
+    const existing = this.locations[index];
+    if (!existing) {
+      return null;
+    }
+
+    const updated: PersistedLocation = {
+      ...existing,
+      timezone: patch.timezone ?? existing.timezone,
+      granularity: patch.granularity ?? existing.granularity,
+    };
+    this.locations[index] = updated;
+    return updated;
+  }
 }
 
 function createServiceStub(): TimeInPlaceService {
   return {
     async lookupLocations(): Promise<LocationMatch[]> {
       return [];
+    },
+    async getTimeForLocation() {
+      return {
+        timestampMs: 1_700_000_000_000,
+        timezone: "UTC",
+        offsetSeconds: 0,
+      };
     },
   } as unknown as TimeInPlaceService;
 }
@@ -75,7 +105,10 @@ function createMainUi(options: MainUiOptions): { ui: TuiUi; calls: { appFeatureC
       async chooseLocationAction(): Promise<LocationActionChoice> {
         return locationActions.shift() ?? "back";
       },
-      async askLookupQuery(): Promise<string> {
+      async chooseRefinementAction(_scopeLabel: string): Promise<RefinementActionChoice> {
+        return "restart";
+      },
+      async askLookupQuery(_message?: string): Promise<string> {
         return "";
       },
       async chooseLookupResult(): Promise<number | null> {

@@ -30,6 +30,12 @@ To run the interactive location persistence TUI:
 bun run tui
 ```
 
+To include metric logs (for example `[metric] ...`) while running the TUI:
+
+```bash
+bun run tui -- --verbose
+```
+
 Menu shortcuts:
 
 - Top-level menu: `Exit` option, `Esc` also exits.
@@ -44,7 +50,7 @@ bun run tui location
 ## Persisted location API
 
 - `GET /api/locations/persisted`
-- `POST /api/locations/persisted` with JSON body `{ "name": string, "lat": number, "long": number, "nickname"?: string }`
+- `POST /api/locations/persisted` with JSON body `{ "name": string, "lat": number, "long": number, "nickname"?: string, "timezone"?: string, "granularity"?: string }`
 - `DELETE /api/locations/persisted/:id`
 
 This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.

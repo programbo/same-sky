@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "locations": [
     {
       "id": "3961e9c0-c96f-45a9-8d62-c083089e62e4",
@@ -9,6 +9,8 @@
         "long": 146.937203
       },
       "nickname": "Bandiana",
+      "timezone": "Australia/Melbourne",
+      "granularity": "municipality",
       "createdAtMs": 1771558317056
     },
     {
@@ -19,6 +21,8 @@
         "long": 133.8812885
       },
       "nickname": "Alice Springs",
+      "timezone": "Australia/Darwin",
+      "granularity": "city",
       "createdAtMs": 1771558645009
     },
     {
@@ -29,7 +33,57 @@
         "long": -112.074141
       },
       "nickname": "Phoenix",
+      "timezone": "America/Phoenix",
+      "granularity": "city",
       "createdAtMs": 1771558694939
+    },
+    {
+      "id": "26edc495-f0f8-47c8-ad87-bfa416b98291",
+      "name": "Australia",
+      "coords": {
+        "lat": -24.7761086,
+        "long": 134.755
+      },
+      "nickname": "Australia",
+      "timezone": "Australia/Darwin",
+      "granularity": "country",
+      "createdAtMs": 1771563330473
+    },
+    {
+      "id": "6498b9bc-dda0-4cbb-8836-7f67c3af3737",
+      "name": "Wandi, Western Australia, Australia",
+      "coords": {
+        "lat": -32.1943168,
+        "long": 115.876973
+      },
+      "nickname": "Wandi",
+      "timezone": "Australia/Perth",
+      "granularity": "suburb",
+      "createdAtMs": 1771565637662
+    },
+    {
+      "id": "de46d38b-cf7e-4d4f-b920-886c2f12ea81",
+      "name": "Singapore, Singapore",
+      "coords": {
+        "lat": 1.2899175,
+        "long": 103.8519072
+      },
+      "nickname": "Singapore",
+      "timezone": "Asia/Singapore",
+      "granularity": "city",
+      "createdAtMs": 1771565754282
+    },
+    {
+      "id": "f374c5c4-f3e1-479c-9135-a5f211ce5aa9",
+      "name": "Singapore",
+      "coords": {
+        "lat": 1.357107,
+        "long": 103.8194992
+      },
+      "nickname": "Singapore",
+      "timezone": "Asia/Singapore",
+      "granularity": "country",
+      "createdAtMs": 1771576369045
     }
   ]
 }

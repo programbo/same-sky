@@ -12,6 +12,7 @@ import type {
 
 const DEFAULT_LOOKUP_LIMIT = 5;
 const MAX_LOOKUP_LIMIT = 10;
+const DEFAULT_TIMEZONE_PREVIEW_LIMIT = 5;
 
 export class TimeInPlaceError extends Error {
   public readonly code: string;
@@ -84,6 +85,10 @@ function fallbackNameForCoordinates(coords: Coordinates): string {
   return `Lat ${coords.lat.toFixed(4)}, Long ${coords.long.toFixed(4)}`;
 }
 
+export function isLocationSelectableForSky(match: Pick<LocationMatch, "isLocalityClass">): boolean {
+  return match.isLocalityClass;
+}
+
 export class TimeInPlaceService {
   constructor(private readonly deps: TimeInPlaceDependencies) {}
 
@@ -102,10 +107,42 @@ export class TimeInPlaceService {
     }
 
     const limit = parseLookupLimit(options?.limit);
+    const includeTimezonePreview = options?.includeTimezonePreview ?? limit <= DEFAULT_TIMEZONE_PREVIEW_LIMIT;
 
     try {
-      const matches = await this.deps.geocodeProvider.search(query, limit);
-      return matches.slice(0, limit);
+      const matches = await this.deps.geocodeProvider.search(query, {
+        limit,
+        localityOnly: options?.localityOnly,
+        scopeBoundingBox: options?.scopeBoundingBox,
+      });
+
+      const trimmed = matches
+        .slice(0, limit)
+        .filter(match => (options?.localityOnly ? isLocationSelectableForSky(match) : true));
+
+      if (!includeTimezonePreview) {
+        return trimmed;
+      }
+
+      const previewAtMs = this.deps.now();
+      const enriched = await Promise.all(
+        trimmed.map(async match => {
+          try {
+            const resolved = await this.deps.timezoneProvider.resolve(match.coords, previewAtMs);
+            return {
+              ...match,
+              timezonePreview: resolved.timezone,
+            };
+          } catch {
+            return {
+              ...match,
+              timezonePreview: undefined,
+            };
+          }
+        }),
+      );
+
+      return enriched;
     } catch (error) {
       this.rethrowAsUpstream("geocode_lookup_failed", "Unable to look up locations.", error);
     }

@@ -1,11 +1,17 @@
 import { TTLCache, createCacheKey, normalizeCacheToken } from "./cache";
 import type {
+  GeocodeSearchOptions,
   GeocodeProvider,
   IpLocationProvider,
   TimeInPlaceDependencies,
   TimezoneProvider,
 } from "./contracts";
-import type { LocationMatch } from "./types";
+import {
+  isLocalityGranularity,
+  parseLocationGranularity,
+  type BoundingBox,
+  type LocationMatch,
+} from "./types";
 
 const SEARCH_CACHE_TTL_MS = 15 * 60 * 1000;
 const REVERSE_CACHE_TTL_MS = 15 * 60 * 1000;
@@ -47,6 +53,10 @@ interface NominatimAddress {
   town?: string;
   village?: string;
   hamlet?: string;
+  suburb?: string;
+  city_district?: string;
+  neighbourhood?: string;
+  neighborhood?: string;
   municipality?: string;
   county?: string;
   state?: string;
@@ -57,6 +67,13 @@ interface NominatimAddress {
 }
 
 interface NominatimRecord {
+  place_id?: number;
+  osm_type?: string;
+  osm_id?: number;
+  class?: string;
+  type?: string;
+  addresstype?: string;
+  boundingbox?: string[];
   lat: string;
   lon: string;
   display_name?: string;
@@ -147,6 +164,10 @@ function formatLocationName(displayName: string | undefined, address: NominatimA
       address.town,
       address.village,
       address.hamlet,
+      address.suburb,
+      address.city_district,
+      address.neighbourhood,
+      address.neighborhood,
       address.municipality,
       address.county,
     ]);
@@ -167,6 +188,68 @@ function formatLocationName(displayName: string | undefined, address: NominatimA
   return "Unknown location";
 }
 
+function parseBoundingBox(values: string[] | undefined): BoundingBox | undefined {
+  if (!values || values.length !== 4) {
+    return undefined;
+  }
+
+  const south = parseCoordinate(values[0]);
+  const north = parseCoordinate(values[1]);
+  const west = parseCoordinate(values[2]);
+  const east = parseCoordinate(values[3]);
+
+  if (south === null || north === null || west === null || east === null) {
+    return undefined;
+  }
+
+  return { south, north, west, east };
+}
+
+function inferGranularity(record: NominatimRecord): ReturnType<typeof parseLocationGranularity> {
+  const candidate = firstDefined([record.addresstype, record.type]);
+  return parseLocationGranularity(candidate);
+}
+
+function formatAdmin(record: NominatimRecord): LocationMatch["admin"] {
+  const locality = firstDefined([
+    record.address?.city,
+    record.address?.town,
+    record.address?.village,
+    record.address?.hamlet,
+    record.address?.suburb,
+    record.address?.city_district,
+    record.address?.municipality,
+    record.address?.neighbourhood,
+    record.address?.neighborhood,
+  ]);
+
+  const region = firstDefined([
+    record.address?.state,
+    record.address?.region,
+    record.address?.state_district,
+    record.address?.province,
+    record.address?.county,
+  ]);
+
+  return {
+    country: firstDefined([record.address?.country]),
+    region,
+    locality,
+  };
+}
+
+function buildLocationId(record: NominatimRecord, source: string, lat: number, long: number): string {
+  if (typeof record.place_id === "number" && Number.isFinite(record.place_id)) {
+    return `${source}:place:${record.place_id}`;
+  }
+
+  if (record.osm_type && typeof record.osm_id === "number" && Number.isFinite(record.osm_id)) {
+    return `${source}:${record.osm_type}:${record.osm_id}`;
+  }
+
+  return `${source}:coord:${lat.toFixed(6)}:${long.toFixed(6)}`;
+}
+
 function nominatimToLocation(record: NominatimRecord, source: string): LocationMatch | null {
   const lat = parseCoordinate(record.lat);
   const long = parseCoordinate(record.lon);
@@ -175,10 +258,19 @@ function nominatimToLocation(record: NominatimRecord, source: string): LocationM
     return null;
   }
 
+  const granularity = inferGranularity(record);
+  const name = formatLocationName(record.display_name, record.address);
+
   return {
-    name: formatLocationName(record.display_name, record.address),
+    id: buildLocationId(record, source, lat, long),
+    name,
+    fullName: record.display_name?.trim() || name,
     coords: { lat, long },
     source,
+    granularity,
+    isLocalityClass: isLocalityGranularity(granularity),
+    admin: formatAdmin(record),
+    boundingBox: parseBoundingBox(record.boundingbox),
   };
 }
 
@@ -237,11 +329,27 @@ function createNominatimProvider(options: RequestOptions & { userAgent: string; 
   const reverseCache = new TTLCache<LocationMatch | null>(options.now);
 
   return {
-    async search(name, limit) {
+    async search(name, searchOptions: GeocodeSearchOptions = {}) {
       const normalizedQuery = normalizeCacheToken(name);
+      const { limit = 5, localityOnly = false, scopeBoundingBox } = searchOptions;
       const safeLimit = Math.max(1, Math.min(10, Math.trunc(limit)));
-      const cacheKey = createCacheKey(["nominatim", "search", normalizedQuery, safeLimit]);
-      const cached = searchCache.get(cacheKey);
+      const scopeToken = scopeBoundingBox
+        ? [
+            scopeBoundingBox.south.toFixed(5),
+            scopeBoundingBox.north.toFixed(5),
+            scopeBoundingBox.west.toFixed(5),
+            scopeBoundingBox.east.toFixed(5),
+          ].join(":")
+        : "none";
+      const scopedCacheKey = createCacheKey([
+        "nominatim",
+        "search",
+        normalizedQuery,
+        safeLimit,
+        scopeToken,
+        localityOnly ? "locality" : "all",
+      ]);
+      const cached = searchCache.get(scopedCacheKey);
       if (cached) {
         return cached;
       }
@@ -251,6 +359,13 @@ function createNominatimProvider(options: RequestOptions & { userAgent: string; 
       url.searchParams.set("addressdetails", "1");
       url.searchParams.set("limit", String(safeLimit));
       url.searchParams.set("q", normalizedQuery);
+      if (scopeBoundingBox) {
+        url.searchParams.set(
+          "viewbox",
+          `${scopeBoundingBox.west},${scopeBoundingBox.north},${scopeBoundingBox.east},${scopeBoundingBox.south}`,
+        );
+        url.searchParams.set("bounded", "1");
+      }
 
       const response = await fetchJson<NominatimRecord[]>(
         url.toString(),
@@ -263,8 +378,11 @@ function createNominatimProvider(options: RequestOptions & { userAgent: string; 
         options,
       );
 
-      const matches = response.map(record => nominatimToLocation(record, "nominatim")).filter((value): value is LocationMatch => value !== null);
-      searchCache.set(cacheKey, matches, SEARCH_CACHE_TTL_MS);
+      const matches = response
+        .map(record => nominatimToLocation(record, "nominatim"))
+        .filter((value): value is LocationMatch => value !== null)
+        .filter(match => !localityOnly || match.isLocalityClass);
+      searchCache.set(scopedCacheKey, matches, SEARCH_CACHE_TTL_MS);
       return matches;
     },
 
@@ -364,10 +482,20 @@ function createIpApiLocationProvider(options: RequestOptions & { now: () => numb
       const parts = [response.city, response.region, response.country_name].filter(
         (value): value is string => Boolean(value && value.trim().length > 0),
       );
+      const name = parts.length > 0 ? parts.join(", ") : "Unknown location";
       const result: LocationMatch = {
-        name: parts.length > 0 ? parts.join(", ") : "Unknown location",
+        id: "ipapi:current",
+        name,
+        fullName: name,
         coords: { lat, long },
         source: "ipapi",
+        granularity: "unknown",
+        isLocalityClass: false,
+        admin: {
+          country: response.country_name,
+          region: response.region,
+          locality: response.city,
+        },
       };
 
       ipCache.set(cacheKey, result, IP_CACHE_TTL_MS);

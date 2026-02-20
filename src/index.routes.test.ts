@@ -1,26 +1,51 @@
 import { describe, expect, test } from "bun:test";
 import type { TimeInPlaceDependencies } from "./lib/time-in-place";
-import type { PersistLocationInput, PersistedLocation, PersistedLocationStoreLike } from "./lib/time-in-place";
+import type { LocationMatch, PersistLocationInput, PersistLocationPatch, PersistedLocation, PersistedLocationStoreLike } from "./lib/time-in-place";
 import { createServer } from "./index";
+
+function makeMatch(overrides: Partial<LocationMatch> = {}): LocationMatch {
+  return {
+    id: overrides.id ?? "test:1",
+    name: overrides.name ?? "Paris, Ile-de-France, France",
+    fullName: overrides.fullName ?? "Paris, Ile-de-France, France",
+    coords: overrides.coords ?? { lat: 48.8566, long: 2.3522 },
+    source: overrides.source ?? "test",
+    granularity: overrides.granularity ?? "city",
+    isLocalityClass: overrides.isLocalityClass ?? true,
+    admin: overrides.admin ?? {
+      country: "France",
+      region: "Ile-de-France",
+      locality: "Paris",
+    },
+    boundingBox: overrides.boundingBox,
+    timezonePreview: overrides.timezonePreview,
+  };
+}
 
 function createDependencies(): TimeInPlaceDependencies {
   return {
     geocodeProvider: {
-      async search(query, limit) {
+      async search(query, options) {
         return [
-          {
-            name: `${query} (${limit})`,
-            coords: { lat: 48.8566, long: 2.3522 },
-            source: "test",
-          },
+          makeMatch({
+            id: "lookup:1",
+            name: `${query} (${options?.limit ?? 0})`,
+            fullName: `${query} (${options?.limit ?? 0})`,
+          }),
         ];
       },
       async reverse(coords) {
-        return {
+        return makeMatch({
+          id: "reverse:1",
           name: "San Francisco, California, United States",
+          fullName: "San Francisco, California, United States",
           coords,
-          source: "test",
-        };
+          admin: {
+            country: "United States",
+            region: "California",
+            locality: "San Francisco",
+          },
+        });
       },
     },
     timezoneProvider: {
@@ -33,11 +58,18 @@ function createDependencies(): TimeInPlaceDependencies {
     },
     ipLocationProvider: {
       async current() {
-        return {
+        return makeMatch({
+          id: "ip:1",
           name: "Seattle, Washington, United States",
+          fullName: "Seattle, Washington, United States",
           coords: { lat: 47.6062, long: -122.3321 },
-          source: "test",
-        };
+          source: "test-ip",
+          admin: {
+            country: "United States",
+            region: "Washington",
+            locality: "Seattle",
+          },
+        });
       },
     },
     now: () => 1_700_000_000_000,
@@ -57,6 +89,8 @@ function createMemoryLocationStore(seed: PersistedLocation[] = []): PersistedLoc
         name: input.name,
         coords: input.coords,
         nickname: input.nickname?.trim() || undefined,
+        timezone: input.timezone,
+        granularity: input.granularity,
         createdAtMs: 1_700_000_000_000 + list.length,
       };
       list.push(entry);
@@ -70,6 +104,25 @@ function createMemoryLocationStore(seed: PersistedLocation[] = []): PersistedLoc
 
       const [removed] = list.splice(index, 1);
       return removed ?? null;
+    },
+    async update(id: string, patch: PersistLocationPatch) {
+      const index = list.findIndex(location => location.id === id);
+      if (index < 0) {
+        return null;
+      }
+
+      const existing = list[index];
+      if (!existing) {
+        return null;
+      }
+
+      const updated: PersistedLocation = {
+        ...existing,
+        timezone: patch.timezone ?? existing.timezone,
+        granularity: patch.granularity ?? existing.granularity,
+      };
+      list[index] = updated;
+      return updated;
     },
   };
 }
@@ -104,44 +157,84 @@ describe("route handlers", () => {
     });
   });
 
-  test("lookup route returns results and clamps limit", async () => {
-    let capturedLimit = 0;
+  test("lookup route returns enriched metadata, supports scope/locality params, and clamps limit", async () => {
+    let capturedOptions: { limit?: number; localityOnly?: boolean; scopeBoundingBox?: { south: number; north: number; west: number; east: number } } | null = null;
     const deps = createDependencies();
-    deps.geocodeProvider.search = async (query, limit) => {
-      capturedLimit = limit;
+    deps.geocodeProvider.search = async (query, options) => {
+      capturedOptions = options ?? null;
       return [
-        {
+        makeMatch({
+          id: "paris:1",
           name: `${query} result`,
+          fullName: "Paris, Ile-de-France, France",
           coords: { lat: 48.8566, long: 2.3522 },
-          source: "test",
-        },
+          granularity: "city",
+          isLocalityClass: true,
+          boundingBox: { south: 48.815, north: 48.902, west: 2.224, east: 2.469 },
+          timezonePreview: "Europe/Paris",
+        }),
       ];
     };
 
     await withServer(deps, createMemoryLocationStore(), async baseUrl => {
-      const response = await fetch(new URL("/api/locations/lookup?q=Paris&limit=999", baseUrl));
+      const response = await fetch(
+        new URL(
+          "/api/locations/lookup?q=Paris&limit=999&localityOnly=1&scopeSouth=48.8&scopeNorth=48.9&scopeWest=2.2&scopeEast=2.5",
+          baseUrl,
+        ),
+      );
       expect(response.status).toBe(200);
-      expect(capturedLimit).toBe(10);
+      expect(capturedOptions).toEqual({
+        limit: 10,
+        localityOnly: true,
+        scopeBoundingBox: {
+          south: 48.8,
+          north: 48.9,
+          west: 2.2,
+          east: 2.5,
+        },
+      });
       expect(await response.json()).toEqual({
         results: [
           {
+            id: "paris:1",
             name: "paris result",
+            fullName: "Paris, Ile-de-France, France",
             lat: 48.8566,
             long: 2.3522,
+            source: "test",
+            granularity: "city",
+            isLocalityClass: true,
+            admin: {
+              country: "France",
+              region: "Ile-de-France",
+              locality: "Paris",
+            },
+            boundingBox: { south: 48.815, north: 48.902, west: 2.224, east: 2.469 },
+            timezonePreview: "Europe/Paris",
           },
         ],
       });
     });
   });
 
-  test("lookup route validates query", async () => {
+  test("lookup route validates scope and query params", async () => {
     await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
-      const response = await fetch(new URL("/api/locations/lookup?q=   ", baseUrl));
-      expect(response.status).toBe(400);
-      expect(await response.json()).toEqual({
+      const emptyQuery = await fetch(new URL("/api/locations/lookup?q=   ", baseUrl));
+      expect(emptyQuery.status).toBe(400);
+      expect(await emptyQuery.json()).toEqual({
         error: {
           code: "invalid_query",
           message: "Lookup query cannot be empty.",
+        },
+      });
+
+      const invalidScope = await fetch(new URL("/api/locations/lookup?q=paris&scopeSouth=abc", baseUrl));
+      expect(invalidScope.status).toBe(400);
+      expect(await invalidScope.json()).toEqual({
+        error: {
+          code: "invalid_scope",
+          message: "scopeSouth, scopeNorth, scopeWest, and scopeEast are required together.",
         },
       });
     });
@@ -249,7 +342,7 @@ describe("route handlers", () => {
     });
   });
 
-  test("persists a location via API with optional nickname", async () => {
+  test("persists a location via API with timezone/granularity", async () => {
     await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
       const response = await fetch(new URL("/api/locations/persisted", baseUrl), {
         method: "POST",
@@ -259,6 +352,8 @@ describe("route handlers", () => {
           lat: 48.8566,
           long: 2.3522,
           nickname: "Trip",
+          timezone: "Europe/Paris",
+          granularity: "city",
         }),
       });
 
@@ -270,6 +365,45 @@ describe("route handlers", () => {
           lat: 48.8566,
           long: 2.3522,
           nickname: "Trip",
+          timezone: "Europe/Paris",
+          granularity: "city",
+          createdAtMs: 1_700_000_000_000,
+        },
+      });
+    });
+  });
+
+  test("persists with timezone fallback when timezone omitted", async () => {
+    let timezoneResolveCount = 0;
+    const deps = createDependencies();
+    deps.timezoneProvider.resolve = async () => {
+      timezoneResolveCount += 1;
+      return {
+        timezone: "America/Los_Angeles",
+        offsetSeconds: -28_800,
+      };
+    };
+
+    await withServer(deps, createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(new URL("/api/locations/persisted", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "San Francisco, California, United States",
+          lat: 37.7749,
+          long: -122.4194,
+        }),
+      });
+
+      expect(response.status).toBe(201);
+      expect(timezoneResolveCount).toBe(1);
+      expect(await response.json()).toEqual({
+        result: {
+          id: "saved-1",
+          name: "San Francisco, California, United States",
+          lat: 37.7749,
+          long: -122.4194,
+          timezone: "America/Los_Angeles",
           createdAtMs: 1_700_000_000_000,
         },
       });
@@ -312,19 +446,23 @@ describe("route handlers", () => {
     });
   });
 
-  test("lists and removes persisted locations via API", async () => {
+  test("lists and removes persisted locations via API and includes timezone metadata", async () => {
     const store = createMemoryLocationStore([
       {
         id: "saved-a",
         name: "Tokyo, Tokyo, Japan",
         coords: { lat: 35.6762, long: 139.6503 },
         nickname: "Work",
+        timezone: "Asia/Tokyo",
+        granularity: "city",
         createdAtMs: 1_700_000_000_010,
       },
       {
         id: "saved-b",
         name: "London, England, United Kingdom",
         coords: { lat: 51.5072, long: -0.1276 },
+        timezone: "Europe/London",
+        granularity: "city",
         createdAtMs: 1_700_000_000_000,
       },
     ]);
@@ -340,6 +478,8 @@ describe("route handlers", () => {
             lat: 35.6762,
             long: 139.6503,
             nickname: "Work",
+            timezone: "Asia/Tokyo",
+            granularity: "city",
             createdAtMs: 1_700_000_000_010,
           },
           {
@@ -347,6 +487,8 @@ describe("route handlers", () => {
             name: "London, England, United Kingdom",
             lat: 51.5072,
             long: -0.1276,
+            timezone: "Europe/London",
+            granularity: "city",
             createdAtMs: 1_700_000_000_000,
           },
         ],
@@ -361,8 +503,49 @@ describe("route handlers", () => {
           lat: 35.6762,
           long: 139.6503,
           nickname: "Work",
+          timezone: "Asia/Tokyo",
+          granularity: "city",
           createdAtMs: 1_700_000_000_010,
         },
+      });
+    });
+  });
+
+  test("backfills timezone on list when legacy entries are missing timezone", async () => {
+    let timezoneResolveCount = 0;
+    const deps = createDependencies();
+    deps.timezoneProvider.resolve = async () => {
+      timezoneResolveCount += 1;
+      return {
+        timezone: "America/New_York",
+        offsetSeconds: -18_000,
+      };
+    };
+
+    const store = createMemoryLocationStore([
+      {
+        id: "saved-a",
+        name: "Legacy Entry",
+        coords: { lat: 40.7128, long: -74.006 },
+        createdAtMs: 1_700_000_000_000,
+      },
+    ]);
+
+    await withServer(deps, store, async baseUrl => {
+      const listed = await fetch(new URL("/api/locations/persisted", baseUrl));
+      expect(listed.status).toBe(200);
+      expect(timezoneResolveCount).toBe(1);
+      expect(await listed.json()).toEqual({
+        results: [
+          {
+            id: "saved-a",
+            name: "Legacy Entry",
+            lat: 40.7128,
+            long: -74.006,
+            timezone: "America/New_York",
+            createdAtMs: 1_700_000_000_000,
+          },
+        ],
       });
     });
   });

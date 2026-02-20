@@ -2,7 +2,7 @@ import { checkbox, input, select } from "@inquirer/prompts";
 import { emitKeypressEvents } from "node:readline";
 import { stdin } from "node:process";
 import type { LocationMatch, PersistedLocation } from "../lib/time-in-place";
-import type { AppFeatureChoice, LocationActionChoice, TuiUi } from "./ui-contract";
+import type { AppFeatureChoice, LocationActionChoice, RefinementActionChoice, TuiUi } from "./ui-contract";
 
 const COLOR = {
   reset: "\x1b[0m",
@@ -70,10 +70,12 @@ async function promptOrFallback<T>(run: () => Promise<T>, fallback: T): Promise<
 }
 
 function formatLocationChoice(match: LocationMatch, index: number): { name: string; value: number; description: string } {
+  const timezone = match.timezonePreview ?? "Timezone unavailable";
+  const localityStatus = match.isLocalityClass ? "ready" : "needs narrowing";
   return {
-    name: `${index + 1}. ${match.name}`,
+    name: `${index + 1}. ${match.name} [${match.granularity}]`,
     value: index,
-    description: `${match.coords.lat.toFixed(4)}, ${match.coords.long.toFixed(4)}`,
+    description: `${match.coords.lat.toFixed(4)}, ${match.coords.long.toFixed(4)} | TZ: ${timezone} | ${localityStatus}`,
   };
 }
 
@@ -157,13 +159,50 @@ export function createInquirerUi(): TuiUi {
       );
     },
 
-    async askLookupQuery(): Promise<string> {
+    async chooseRefinementAction(scopeLabel: string): Promise<RefinementActionChoice> {
+      return promptOrFallback(
+        () =>
+          withEscAbort(signal =>
+            select<RefinementActionChoice>(
+              {
+                message: `Refine selection within ${scopeLabel}`,
+                choices: [
+                  {
+                    name: "Browse locality options in this area",
+                    value: "browse",
+                    description: "Recommended: show likely city/suburb matches first",
+                  },
+                  {
+                    name: "Search within this area",
+                    value: "search",
+                    description: "Enter your own query scoped to this boundary",
+                  },
+                  {
+                    name: "Start over with a new top-level search",
+                    value: "restart",
+                    description: "Discard this refinement path and search again",
+                  },
+                ],
+                theme: {
+                  style: {
+                    keysHelpTip: (keys: [string, string][]) => withEscLegend(keys, "restart"),
+                  },
+                },
+              },
+              { signal },
+            ),
+          ),
+        "restart",
+      );
+    },
+
+    async askLookupQuery(message = "Search query"): Promise<string> {
       return promptOrFallback(
         () =>
           withEscAbort(signal =>
             input(
               {
-                message: "Search query",
+                message,
               },
               { signal },
             ),

@@ -2,7 +2,7 @@ import { serve } from "bun";
 import index from "./index.html";
 import type { TimeInPlaceDependencies } from "./lib/time-in-place";
 import { createTimeInPlaceService, TimeInPlaceError, ValidationError, validateCoordinates } from "./lib/time-in-place";
-import type { Coordinates } from "./lib/time-in-place";
+import { parseLocationGranularity, type BoundingBox, type Coordinates, type LocationGranularity } from "./lib/time-in-place";
 import { PersistedLocationStore } from "./lib/time-in-place";
 import type { PersistLocationInput, PersistedLocation, PersistedLocationStoreLike } from "./lib/time-in-place";
 
@@ -83,6 +83,69 @@ function parseLookupLimit(params: URLSearchParams): number | undefined {
   return limit;
 }
 
+function parseOptionalScopeBoundingBox(params: URLSearchParams): BoundingBox | undefined {
+  const southRaw = params.get("scopeSouth");
+  const northRaw = params.get("scopeNorth");
+  const westRaw = params.get("scopeWest");
+  const eastRaw = params.get("scopeEast");
+
+  if (southRaw === null && northRaw === null && westRaw === null && eastRaw === null) {
+    return undefined;
+  }
+
+  if (southRaw === null || northRaw === null || westRaw === null || eastRaw === null) {
+    throw new ValidationError(
+      "invalid_scope",
+      "scopeSouth, scopeNorth, scopeWest, and scopeEast are required together.",
+    );
+  }
+
+  const south = Number(southRaw);
+  const north = Number(northRaw);
+  const west = Number(westRaw);
+  const east = Number(eastRaw);
+
+  if (![south, north, west, east].every(Number.isFinite)) {
+    throw new ValidationError("invalid_scope", "Scope bounds must be finite numbers.");
+  }
+
+  if (south < -90 || south > 90 || north < -90 || north > 90) {
+    throw new ValidationError("invalid_scope", "Scope latitude bounds must be within [-90, 90].");
+  }
+
+  if (west < -180 || west > 180 || east < -180 || east > 180) {
+    throw new ValidationError("invalid_scope", "Scope longitude bounds must be within [-180, 180].");
+  }
+
+  if (south > north) {
+    throw new ValidationError("invalid_scope", "scopeSouth must be <= scopeNorth.");
+  }
+
+  if (west > east) {
+    throw new ValidationError("invalid_scope", "scopeWest must be <= scopeEast.");
+  }
+
+  return { south, north, west, east };
+}
+
+function parseLookupLocalityOnly(params: URLSearchParams): boolean | undefined {
+  const raw = params.get("localityOnly");
+  if (raw === null) {
+    return undefined;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true") {
+    return true;
+  }
+
+  if (normalized === "0" || normalized === "false") {
+    return false;
+  }
+
+  throw new ValidationError("invalid_locality_only", "localityOnly must be one of: 1, 0, true, false.");
+}
+
 function parseOptionalTimestamp(params: URLSearchParams): number | undefined {
   const atRaw = params.get("at");
   if (atRaw === null) {
@@ -107,6 +170,8 @@ function parsePersistLocationInput(payload: unknown): PersistLocationInput {
   const lat = record.lat;
   const long = record.long;
   const nickname = record.nickname;
+  const timezone = record.timezone;
+  const granularity = record.granularity;
 
   if (typeof name !== "string" || !name.trim()) {
     throw new ValidationError("invalid_name", "name is required and must be a non-empty string.");
@@ -120,6 +185,19 @@ function parsePersistLocationInput(payload: unknown): PersistLocationInput {
     throw new ValidationError("invalid_nickname", "nickname must be a string when provided.");
   }
 
+  if (timezone !== undefined && (typeof timezone !== "string" || !timezone.trim())) {
+    throw new ValidationError("invalid_timezone", "timezone must be a non-empty string when provided.");
+  }
+
+  let parsedGranularity: LocationGranularity | undefined;
+  if (granularity !== undefined) {
+    if (typeof granularity !== "string") {
+      throw new ValidationError("invalid_granularity", "granularity must be a string when provided.");
+    }
+
+    parsedGranularity = parseLocationGranularity(granularity);
+  }
+
   const coords = { lat, long };
   validateCoordinates(coords);
 
@@ -127,6 +205,8 @@ function parsePersistLocationInput(payload: unknown): PersistLocationInput {
     name: name.trim(),
     coords,
     nickname,
+    timezone: timezone?.trim(),
+    granularity: parsedGranularity,
   };
 }
 
@@ -144,6 +224,8 @@ function toPersistedResponse(location: PersistedLocation): {
   lat: number;
   long: number;
   nickname?: string;
+  timezone?: string;
+  granularity?: LocationGranularity;
   createdAtMs: number;
 } {
   return {
@@ -152,7 +234,30 @@ function toPersistedResponse(location: PersistedLocation): {
     lat: location.coords.lat,
     long: location.coords.long,
     nickname: location.nickname,
+    timezone: location.timezone,
+    granularity: location.granularity,
     createdAtMs: location.createdAtMs,
+  };
+}
+
+async function hydratePersistedLocation(
+  location: PersistedLocation,
+  service: ReturnType<typeof createTimeInPlaceService>,
+  locationStore: PersistedLocationStoreLike,
+): Promise<PersistedLocation> {
+  if (location.timezone) {
+    return location;
+  }
+
+  const resolved = await service.getTimeForLocation(location.coords);
+  const updated = await locationStore.update(location.id, { timezone: resolved.timezone });
+  if (updated) {
+    return updated;
+  }
+
+  return {
+    ...location,
+    timezone: resolved.timezone,
   };
 }
 
@@ -193,13 +298,27 @@ export function createServer(options: CreateServerOptions = {}) {
           const url = new URL(req.url);
           const query = url.searchParams.get("q") ?? "";
           const limit = parseLookupLimit(url.searchParams);
-          const results = await service.lookupLocations(query, { limit });
+          const scopeBoundingBox = parseOptionalScopeBoundingBox(url.searchParams);
+          const localityOnly = parseLookupLocalityOnly(url.searchParams);
+          const results = await service.lookupLocations(query, {
+            limit,
+            scopeBoundingBox,
+            localityOnly,
+          });
 
           return Response.json({
             results: results.map(result => ({
+              id: result.id,
               name: result.name,
+              fullName: result.fullName,
               lat: result.coords.lat,
               long: result.coords.long,
+              source: result.source,
+              granularity: result.granularity,
+              isLocalityClass: result.isLocalityClass,
+              admin: result.admin,
+              boundingBox: result.boundingBox,
+              timezonePreview: result.timezonePreview,
             })),
           });
         } catch (error) {
@@ -242,7 +361,10 @@ export function createServer(options: CreateServerOptions = {}) {
       "/api/locations/persisted": {
         async GET() {
           try {
-            const results = await locationStore.list();
+            const listed = await locationStore.list();
+            const results = await Promise.all(
+              listed.map(location => hydratePersistedLocation(location, service, locationStore)),
+            );
             return Response.json({
               results: results.map(toPersistedResponse),
             });
@@ -255,7 +377,11 @@ export function createServer(options: CreateServerOptions = {}) {
           try {
             const payload = await parseJsonBody(req);
             const input = parsePersistLocationInput(payload);
-            const result = await locationStore.add(input);
+            const timezone = input.timezone ?? (await service.getTimeForLocation(input.coords)).timezone;
+            const result = await locationStore.add({
+              ...input,
+              timezone,
+            });
             return Response.json({ result: toPersistedResponse(result) }, { status: 201 });
           } catch (error) {
             return errorResponse(error);
@@ -280,7 +406,14 @@ export function createServer(options: CreateServerOptions = {}) {
               );
             }
 
-            return Response.json({ result: toPersistedResponse(removed) });
+            const normalized = removed.timezone
+              ? removed
+              : {
+                  ...removed,
+                  timezone: (await service.getTimeForLocation(removed.coords)).timezone,
+                };
+
+            return Response.json({ result: toPersistedResponse(normalized) });
           } catch (error) {
             return errorResponse(error);
           }

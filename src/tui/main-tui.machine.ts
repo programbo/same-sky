@@ -5,6 +5,7 @@ import type { AppFeatureChoice, TuiUi } from "./ui-contract";
 
 interface MainTuiContext {
   argv: string[];
+  verbose: boolean;
   ui: TuiUi;
   service: TimeInPlaceService;
   store: PersistedLocationStoreLike;
@@ -13,6 +14,7 @@ interface MainTuiContext {
 
 interface MainTuiInput {
   argv: string[];
+  verbose?: boolean;
   ui: TuiUi;
   service: TimeInPlaceService;
   store: PersistedLocationStoreLike;
@@ -71,6 +73,7 @@ export const mainTuiMachine = setup({
   id: "mainTui",
   context: ({ input }) => ({
     argv: input.argv,
+    verbose: input.verbose ?? false,
     ui: input.ui,
     service: input.service,
     store: input.store,
@@ -128,6 +131,7 @@ export const mainTuiMachine = setup({
           service: context.service,
           store: context.store,
           ui: context.ui,
+          verbose: context.verbose,
         }),
         onDone: {
           target: "featureMenu",

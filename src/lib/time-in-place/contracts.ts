@@ -1,7 +1,13 @@
-import type { Coordinates, LocationMatch } from "./types";
+import type { BoundingBox, Coordinates, LocationMatch } from "./types";
+
+export interface GeocodeSearchOptions {
+  limit?: number;
+  scopeBoundingBox?: BoundingBox;
+  localityOnly?: boolean;
+}
 
 export interface GeocodeProvider {
-  search(name: string, limit: number): Promise<LocationMatch[]>;
+  search(name: string, options?: GeocodeSearchOptions): Promise<LocationMatch[]>;
   reverse(coords: Coordinates): Promise<LocationMatch | null>;
 }
 
@@ -22,6 +28,9 @@ export interface TimeInPlaceDependencies {
 
 export interface LookupOptions {
   limit?: number;
+  scopeBoundingBox?: BoundingBox;
+  localityOnly?: boolean;
+  includeTimezonePreview?: boolean;
 }
 
 export interface CurrentLocationOptions {
