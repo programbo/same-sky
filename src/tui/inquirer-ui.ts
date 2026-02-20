@@ -18,6 +18,10 @@ function paint(text: string, color: string): string {
   return `${color}${text}${COLOR.reset}`;
 }
 
+function withEscLegend(keys: [key: string, action: string][], escAction: string): string {
+  return [...keys, ["esc", escAction]].map(([key, action]) => `${key} ${action}`).join(" • ");
+}
+
 function isPromptCancelled(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -112,6 +116,11 @@ export function createInquirerUi(): TuiUi {
                   { name: "Location persistence", value: "location" },
                   { name: "Exit", value: "exit" },
                 ],
+                theme: {
+                  style: {
+                    keysHelpTip: (keys: [string, string][]) => withEscLegend(keys, "exit"),
+                  },
+                },
               },
               { signal },
             ),
@@ -135,6 +144,11 @@ export function createInquirerUi(): TuiUi {
                   { name: "Remove persisted", value: "remove" },
                   { name: "Back", value: "back" },
                 ],
+                theme: {
+                  style: {
+                    keysHelpTip: (keys: [string, string][]) => withEscLegend(keys, "back"),
+                  },
+                },
               },
               { signal },
             ),
@@ -173,6 +187,11 @@ export function createInquirerUi(): TuiUi {
                     description: "Return to location actions",
                   },
                 ],
+                theme: {
+                  style: {
+                    keysHelpTip: (keys: [string, string][]) => withEscLegend(keys, "back"),
+                  },
+                },
               },
               { signal },
             ),
@@ -212,6 +231,11 @@ export function createInquirerUi(): TuiUi {
                 message: "Select persisted locations to remove",
                 choices: locations.map(formatRemovalChoice),
                 pageSize: 12,
+                theme: {
+                  style: {
+                    keysHelpTip: (keys: [string, string][]) => withEscLegend(keys, "abort"),
+                  },
+                },
               },
               { signal },
             ),

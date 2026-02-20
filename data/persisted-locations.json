@@ -30,16 +30,6 @@
       },
       "nickname": "Phoenix",
       "createdAtMs": 1771558694939
-    },
-    {
-      "id": "fc8dc338-a018-4671-9818-389ea1499a46",
-      "name": "Test One, State, Country",
-      "coords": {
-        "lat": 1,
-        "long": 1
-      },
-      "nickname": "one",
-      "createdAtMs": 1771561873219
     }
   ]
 }
