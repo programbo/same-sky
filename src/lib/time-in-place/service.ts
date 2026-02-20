@@ -1,0 +1,227 @@
+import { normalizeCacheToken } from "./cache";
+import type { CurrentLocationOptions, LookupOptions, TimeInPlaceDependencies } from "./contracts";
+import { angleForTimeOffset } from "./math";
+import { createDefaultDependencies } from "./providers";
+import type {
+  AngleUnit,
+  Coordinates,
+  CurrentLocationResult,
+  LocationMatch,
+  LocationTime,
+} from "./types";
+
+const DEFAULT_LOOKUP_LIMIT = 5;
+const MAX_LOOKUP_LIMIT = 10;
+
+export class TimeInPlaceError extends Error {
+  public readonly code: string;
+  public readonly status: number;
+
+  constructor(code: string, status: number, message: string, cause?: unknown) {
+    super(message);
+    this.name = "TimeInPlaceError";
+    this.code = code;
+    this.status = status;
+    if (cause !== undefined) {
+      this.cause = cause;
+    }
+  }
+}
+
+export class ValidationError extends TimeInPlaceError {
+  constructor(code: string, message: string) {
+    super(code, 400, message);
+    this.name = "ValidationError";
+  }
+}
+
+export class UpstreamError extends TimeInPlaceError {
+  constructor(code: string, message: string, cause?: unknown) {
+    super(code, 502, message, cause);
+    this.name = "UpstreamError";
+  }
+}
+
+export function normalizeLookupQuery(query: string): string {
+  return normalizeCacheToken(query);
+}
+
+export function validateCoordinates(coords: Coordinates): void {
+  if (
+    !Number.isFinite(coords.lat) ||
+    !Number.isFinite(coords.long) ||
+    coords.lat < -90 ||
+    coords.lat > 90 ||
+    coords.long < -180 ||
+    coords.long > 180
+  ) {
+    throw new ValidationError("invalid_coordinates", "Coordinates must include lat in [-90, 90] and long in [-180, 180].");
+  }
+}
+
+function parseLookupLimit(limit?: number): number {
+  if (limit === undefined) {
+    return DEFAULT_LOOKUP_LIMIT;
+  }
+
+  if (!Number.isFinite(limit)) {
+    throw new ValidationError("invalid_limit", "Limit must be a finite number.");
+  }
+
+  const integer = Math.trunc(limit);
+  return Math.max(1, Math.min(MAX_LOOKUP_LIMIT, integer));
+}
+
+function parseTimestamp(atMs: number): number {
+  if (!Number.isFinite(atMs)) {
+    throw new ValidationError("invalid_timestamp", "Timestamp must be a finite Unix epoch value in milliseconds.");
+  }
+
+  return Math.trunc(atMs);
+}
+
+function fallbackNameForCoordinates(coords: Coordinates): string {
+  return `Lat ${coords.lat.toFixed(4)}, Long ${coords.long.toFixed(4)}`;
+}
+
+export class TimeInPlaceService {
+  constructor(private readonly deps: TimeInPlaceDependencies) {}
+
+  private rethrowAsUpstream(code: string, message: string, error: unknown): never {
+    if (error instanceof TimeInPlaceError) {
+      throw error;
+    }
+
+    throw new UpstreamError(code, message, error);
+  }
+
+  async lookupLocations(name: string, options?: LookupOptions): Promise<LocationMatch[]> {
+    const query = normalizeLookupQuery(name);
+    if (!query) {
+      throw new ValidationError("invalid_query", "Lookup query cannot be empty.");
+    }
+
+    const limit = parseLookupLimit(options?.limit);
+
+    try {
+      const matches = await this.deps.geocodeProvider.search(query, limit);
+      return matches.slice(0, limit);
+    } catch (error) {
+      this.rethrowAsUpstream("geocode_lookup_failed", "Unable to look up locations.", error);
+    }
+  }
+
+  async getCurrentLocation(options?: CurrentLocationOptions): Promise<CurrentLocationResult> {
+    if (options?.browserCoords) {
+      validateCoordinates(options.browserCoords);
+
+      try {
+        const reverseMatch = await this.deps.geocodeProvider.reverse(options.browserCoords);
+        if (reverseMatch) {
+          return {
+            name: reverseMatch.name,
+            coords: reverseMatch.coords,
+            source: "browser",
+          };
+        }
+
+        return {
+          name: fallbackNameForCoordinates(options.browserCoords),
+          coords: options.browserCoords,
+          source: "browser",
+        };
+      } catch (error) {
+        this.rethrowAsUpstream("geocode_reverse_failed", "Unable to resolve a name for browser coordinates.", error);
+      }
+    }
+
+    try {
+      const ipMatch = await this.deps.ipLocationProvider.current();
+      if (!ipMatch) {
+        throw new UpstreamError("ip_location_unavailable", "Unable to resolve current location from IP.");
+      }
+
+      return {
+        name: ipMatch.name,
+        coords: ipMatch.coords,
+        source: "ip",
+      };
+    } catch (error) {
+      this.rethrowAsUpstream("ip_location_failed", "Unable to resolve current location from IP.", error);
+    }
+  }
+
+  async getTimeForLocation(coords: Coordinates, atMs = this.deps.now()): Promise<LocationTime> {
+    validateCoordinates(coords);
+    const timestampMs = parseTimestamp(atMs);
+
+    try {
+      const resolved = await this.deps.timezoneProvider.resolve(coords, timestampMs);
+
+      if (!resolved.timezone || !Number.isFinite(resolved.offsetSeconds)) {
+        throw new Error("Timezone response was incomplete.");
+      }
+
+      return {
+        timestampMs,
+        timezone: resolved.timezone,
+        offsetSeconds: Math.trunc(resolved.offsetSeconds),
+      };
+    } catch (error) {
+      this.rethrowAsUpstream("timezone_lookup_failed", "Unable to resolve timezone information.", error);
+    }
+  }
+
+  async getOffsetForLocation(coords: Coordinates, atMs = this.deps.now()): Promise<number> {
+    const locationTime = await this.getTimeForLocation(coords, atMs);
+    return locationTime.offsetSeconds;
+  }
+
+  getAngleForOffset(seconds: number, unit: AngleUnit): number {
+    if (!Number.isFinite(seconds)) {
+      throw new ValidationError("invalid_offset", "Offset seconds must be a finite number.");
+    }
+
+    return angleForTimeOffset(seconds, unit);
+  }
+
+  async getAngleForLocation(coords: Coordinates, unit: AngleUnit, atMs = this.deps.now()): Promise<number> {
+    const offsetSeconds = await this.getOffsetForLocation(coords, atMs);
+    return this.getAngleForOffset(offsetSeconds, unit);
+  }
+
+  async locationLookup(name: string): Promise<[string, Coordinates][]> {
+    const matches = await this.lookupLocations(name, { limit: DEFAULT_LOOKUP_LIMIT });
+    return matches.map(match => [match.name, match.coords]);
+  }
+
+  async currentLocation(): Promise<[string, Coordinates]> {
+    const current = await this.getCurrentLocation();
+    return [current.name, current.coords];
+  }
+
+  async timeInLocation(coords: Coordinates): Promise<[number, string]> {
+    const locationTime = await this.getTimeForLocation(coords);
+    return [locationTime.timestampMs, locationTime.timezone];
+  }
+
+  async angleForLocation(coords: Coordinates, radOrDeg: AngleUnit): Promise<number> {
+    return this.getAngleForLocation(coords, radOrDeg);
+  }
+
+  async timeOffsetForLocation(coords: Coordinates): Promise<number> {
+    return this.getOffsetForLocation(coords);
+  }
+
+  angleForTimeOffset(seconds: number, radOrDeg: AngleUnit): number {
+    return this.getAngleForOffset(seconds, radOrDeg);
+  }
+}
+
+export function createTimeInPlaceService(dependencies?: Partial<TimeInPlaceDependencies>): TimeInPlaceService {
+  const defaultDependencies = createDefaultDependencies();
+  return new TimeInPlaceService({
+    ...defaultDependencies,
+    ...dependencies,
+  });
+}

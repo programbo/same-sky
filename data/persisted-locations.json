@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "locations": [
+    {
+      "id": "3961e9c0-c96f-45a9-8d62-c083089e62e4",
+      "name": "City of Wodonga, Victoria, Australia",
+      "coords": {
+        "lat": -36.131111,
+        "long": 146.937203
+      },
+      "nickname": "Bandiana",
+      "createdAtMs": 1771558317056
+    },
+    {
+      "id": "6a235dc3-0b4b-4d64-b3f4-63f4c638838e",
+      "name": "Alice Springs, Australia",
+      "coords": {
+        "lat": -23.6983884,
+        "long": 133.8812885
+      },
+      "nickname": "Alice Springs",
+      "createdAtMs": 1771558645009
+    },
+    {
+      "id": "35cf49b2-1715-440f-81bc-b452ac071fbc",
+      "name": "Phoenix, Arizona, United States",
+      "coords": {
+        "lat": 33.4484367,
+        "long": -112.074141
+      },
+      "nickname": "Phoenix",
+      "createdAtMs": 1771558694939
+    },
+    {
+      "id": "fc8dc338-a018-4671-9818-389ea1499a46",
+      "name": "Test One, State, Country",
+      "coords": {
+        "lat": 1,
+        "long": 1
+      },
+      "nickname": "one",
+      "createdAtMs": 1771561873219
+    }
+  ]
+}

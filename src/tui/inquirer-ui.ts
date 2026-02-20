@@ -1,0 +1,223 @@
+import { checkbox, input, select } from "@inquirer/prompts";
+import { emitKeypressEvents } from "node:readline";
+import { stdin } from "node:process";
+import type { LocationMatch, PersistedLocation } from "../lib/time-in-place";
+import type { AppFeatureChoice, LocationActionChoice, TuiUi } from "./ui-contract";
+
+const COLOR = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  red: "\x1b[31m",
+  dim: "\x1b[2m",
+};
+
+function paint(text: string, color: string): string {
+  return `${color}${text}${COLOR.reset}`;
+}
+
+function isPromptCancelled(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.name === "ExitPromptError" ||
+    error.name === "AbortPromptError" ||
+    error.message.toLowerCase().includes("force closed")
+  );
+}
+
+async function withEscAbort<T>(run: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  if (!stdin.isTTY) {
+    const controller = new AbortController();
+    return run(controller.signal);
+  }
+
+  const controller = new AbortController();
+  emitKeypressEvents(stdin);
+
+  const onKeypress = (_character: string, key: { name?: string } | undefined) => {
+    if (key?.name === "escape") {
+      controller.abort();
+    }
+  };
+
+  stdin.on("keypress", onKeypress);
+  try {
+    return await run(controller.signal);
+  } finally {
+    stdin.off("keypress", onKeypress);
+  }
+}
+
+async function promptOrFallback<T>(run: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (isPromptCancelled(error)) {
+      return fallback;
+    }
+
+    throw error;
+  }
+}
+
+function formatLocationChoice(match: LocationMatch, index: number): { name: string; value: number; description: string } {
+  return {
+    name: `${index + 1}. ${match.name}`,
+    value: index,
+    description: `${match.coords.lat.toFixed(4)}, ${match.coords.long.toFixed(4)}`,
+  };
+}
+
+function formatRemovalChoice(location: PersistedLocation): { name: string; value: string; description: string } {
+  return {
+    name: location.nickname ? `${location.name} (${location.nickname})` : location.name,
+    value: location.id,
+    description: `${location.coords.lat.toFixed(4)}, ${location.coords.long.toFixed(4)}`,
+  };
+}
+
+export function createInquirerUi(): TuiUi {
+  return {
+    printHeader(title) {
+      console.log("\n" + paint("=".repeat(64), COLOR.cyan));
+      console.log(paint(` ${title}`, `${COLOR.bold}${COLOR.cyan}`));
+      console.log(paint("=".repeat(64), COLOR.cyan));
+    },
+    printInfo(message) {
+      console.log(message);
+    },
+    printSuccess(message) {
+      console.log(paint(message, COLOR.green));
+    },
+    printWarning(message) {
+      console.log(paint(message, COLOR.yellow));
+    },
+    printError(message) {
+      console.error(paint(message, COLOR.red));
+    },
+
+    async chooseAppFeature(): Promise<AppFeatureChoice> {
+      const choice = await promptOrFallback(
+        () =>
+          withEscAbort(signal =>
+            select<AppFeatureChoice>(
+              {
+                message: "Select app feature to test",
+                choices: [
+                  { name: "Location persistence", value: "location" },
+                  { name: "Exit", value: "exit" },
+                ],
+              },
+              { signal },
+            ),
+          ),
+        "exit",
+      );
+
+      return choice;
+    },
+
+    async chooseLocationAction(): Promise<LocationActionChoice> {
+      return promptOrFallback(
+        () =>
+          withEscAbort(signal =>
+            select<LocationActionChoice>(
+              {
+                message: "Location persistence actions",
+                choices: [
+                  { name: "Lookup and persist", value: "lookup" },
+                  { name: "View persisted", value: "view" },
+                  { name: "Remove persisted", value: "remove" },
+                  { name: "Back", value: "back" },
+                ],
+              },
+              { signal },
+            ),
+          ),
+        "back",
+      );
+    },
+
+    async askLookupQuery(): Promise<string> {
+      return promptOrFallback(
+        () =>
+          withEscAbort(signal =>
+            input(
+              {
+                message: "Search query",
+              },
+              { signal },
+            ),
+          ),
+        "",
+      );
+    },
+
+    async chooseLookupResult(results): Promise<number | null> {
+      const choice = await promptOrFallback(
+        () =>
+          withEscAbort(signal =>
+            select<number>(
+              {
+                message: "Select a location to persist",
+                choices: [
+                  ...results.map(formatLocationChoice),
+                  {
+                    name: "Back",
+                    value: -1,
+                    description: "Return to location actions",
+                  },
+                ],
+              },
+              { signal },
+            ),
+          ),
+        -1,
+      );
+
+      if (choice < 0) {
+        return null;
+      }
+
+      return choice;
+    },
+
+    async askNickname(defaultNickname): Promise<string | null> {
+      return promptOrFallback(
+        () =>
+          withEscAbort(signal =>
+            input(
+              {
+                message: `Nickname [${defaultNickname}]`,
+                default: defaultNickname,
+              },
+              { signal },
+            ),
+          ),
+        null,
+      );
+    },
+
+    async chooseRemovalIds(locations): Promise<string[]> {
+      return promptOrFallback(
+        () =>
+          withEscAbort(signal =>
+            checkbox<string>(
+              {
+                message: "Select persisted locations to remove",
+                choices: locations.map(formatRemovalChoice),
+                pageSize: 12,
+              },
+              { signal },
+            ),
+          ),
+        [],
+      );
+    },
+  };
+}
