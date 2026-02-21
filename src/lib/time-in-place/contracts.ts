@@ -1,4 +1,4 @@
-import type { BoundingBox, Coordinates, LocationMatch } from "./types";
+import type { BoundingBox, Coordinates, LocationMatch, SkyEnvironment } from "./types";
 
 export interface GeocodeSearchOptions {
   limit?: number;
@@ -19,10 +19,15 @@ export interface IpLocationProvider {
   current(): Promise<LocationMatch | null>;
 }
 
+export interface SkyEnvironmentProvider {
+  resolve(coords: Coordinates, atMs: number, timezone: string): Promise<SkyEnvironment>;
+}
+
 export interface TimeInPlaceDependencies {
   geocodeProvider: GeocodeProvider;
   timezoneProvider: TimezoneProvider;
   ipLocationProvider: IpLocationProvider;
+  skyEnvironmentProvider: SkyEnvironmentProvider;
   now: () => number;
 }
 

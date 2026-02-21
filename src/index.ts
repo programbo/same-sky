@@ -160,6 +160,24 @@ function parseOptionalTimestamp(params: URLSearchParams): number | undefined {
   return at;
 }
 
+function parseSecondOrderEnabled(params: URLSearchParams): boolean {
+  const raw = params.get("secondOrder");
+  if (raw === null) {
+    return true;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true") {
+    return true;
+  }
+
+  if (normalized === "0" || normalized === "false") {
+    return false;
+  }
+
+  throw new ValidationError("invalid_second_order", "secondOrder must be one of: 1, 0, true, false.");
+}
+
 function parsePersistLocationInput(payload: unknown): PersistLocationInput {
   if (!payload || typeof payload !== "object") {
     throw new ValidationError("invalid_payload", "JSON body is required.");
@@ -351,6 +369,23 @@ export function createServer(options: CreateServerOptions = {}) {
           const coords = parseRequiredCoordinates(url.searchParams);
           const atMs = parseOptionalTimestamp(url.searchParams);
           const result = await service.getTimeForLocation(coords, atMs);
+
+          return Response.json({ result });
+        } catch (error) {
+          return errorResponse(error);
+        }
+      },
+
+      "/api/location/sky-24h": async req => {
+        try {
+          const url = new URL(req.url);
+          const coords = parseRequiredCoordinates(url.searchParams);
+          const atMs = parseOptionalTimestamp(url.searchParams);
+          const applySecondOrder = parseSecondOrderEnabled(url.searchParams);
+          const result = await service.getSkyColorForLocation(coords, {
+            atMs,
+            applySecondOrder,
+          });
 
           return Response.json({ result });
         } catch (error) {

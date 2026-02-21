@@ -2,12 +2,16 @@ import { normalizeCacheToken } from "./cache";
 import type { CurrentLocationOptions, LookupOptions, TimeInPlaceDependencies } from "./contracts";
 import { angleForTimeOffset } from "./math";
 import { createDefaultDependencies } from "./providers";
+import { computeSky24h } from "./sky";
 import type {
   AngleUnit,
   Coordinates,
   CurrentLocationResult,
   LocationMatch,
   LocationTime,
+  Sky24hResult,
+  SkyColorStop,
+  SkyComputationOptions,
 } from "./types";
 
 const DEFAULT_LOOKUP_LIMIT = 5;
@@ -227,6 +231,33 @@ export class TimeInPlaceService {
     return this.getAngleForOffset(offsetSeconds, unit);
   }
 
+  async getSkyColorForLocation(coords: Coordinates, options?: SkyComputationOptions): Promise<Sky24hResult> {
+    validateCoordinates(coords);
+    const atMs = parseTimestamp(options?.atMs ?? this.deps.now());
+
+    try {
+      const timezone = await this.deps.timezoneProvider.resolve(coords, atMs);
+      const environment = await this.deps.skyEnvironmentProvider.resolve(coords, atMs, timezone.timezone);
+      return computeSky24h(coords, environment, atMs, {
+        factorOverrides: options?.factorOverrides,
+        applySecondOrder: options?.applySecondOrder,
+      });
+    } catch (error) {
+      this.rethrowAsUpstream("sky_lookup_failed", "Unable to resolve sky color information.", error);
+    }
+  }
+
+  async getSkyColorForLocationAndTime(
+    coords: Coordinates,
+    atMs: number,
+    options?: Omit<SkyComputationOptions, "atMs">,
+  ): Promise<Sky24hResult> {
+    return this.getSkyColorForLocation(coords, {
+      ...options,
+      atMs,
+    });
+  }
+
   async locationLookup(name: string): Promise<[string, Coordinates][]> {
     const matches = await this.lookupLocations(name, { limit: DEFAULT_LOOKUP_LIMIT });
     return matches.map(match => [match.name, match.coords]);
@@ -252,6 +283,16 @@ export class TimeInPlaceService {
 
   angleForTimeOffset(seconds: number, radOrDeg: AngleUnit): number {
     return this.getAngleForOffset(seconds, radOrDeg);
+  }
+
+  async skyColourForLocation(coords: Coordinates): Promise<[SkyColorStop[], number]> {
+    const result = await this.getSkyColorForLocation(coords);
+    return [result.stops, result.rotationDeg];
+  }
+
+  async skyColourForLocationAndTime(coords: Coordinates, atMs: number): Promise<[SkyColorStop[], number]> {
+    const result = await this.getSkyColorForLocationAndTime(coords, atMs);
+    return [result.stops, result.rotationDeg];
   }
 }
 

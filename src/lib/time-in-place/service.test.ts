@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { TimeInPlaceDependencies } from "./contracts";
 import { TimeInPlaceService, isLocationSelectableForSky } from "./service";
-import type { Coordinates, LocationMatch } from "./types";
+import type { Coordinates, LocationMatch, SkyEnvironment } from "./types";
 
 function makeMatch(overrides: Partial<LocationMatch> = {}): LocationMatch {
   return {
@@ -23,6 +23,36 @@ function makeMatch(overrides: Partial<LocationMatch> = {}): LocationMatch {
 }
 
 function buildDependencies(overrides: Partial<TimeInPlaceDependencies> = {}): TimeInPlaceDependencies {
+  const defaultSkyEnvironment: SkyEnvironment = {
+    timezone: "UTC",
+    samples: [
+      {
+        timestampMs: 1_700_000_000_000,
+        factors: {
+          altitude: 0.2,
+          turbidity: 0.4,
+          humidity: 0.5,
+          cloud_fraction: 0.3,
+          ozone_factor: 0.45,
+          light_pollution: 0.6,
+        },
+      },
+    ],
+    diagnostics: {
+      factors: {
+        altitude: { value: 0.2, source: "live", confidence: 0.9 },
+        turbidity: { value: 0.4, source: "live", confidence: 0.8 },
+        humidity: { value: 0.5, source: "live", confidence: 0.8 },
+        cloud_fraction: { value: 0.3, source: "live", confidence: 0.8 },
+        ozone_factor: { value: 0.45, source: "live", confidence: 0.7 },
+        light_pollution: { value: 0.6, source: "live", confidence: 0.7 },
+      },
+      providerQuality: "live",
+      degraded: false,
+      fallbackReasons: [],
+    },
+  };
+
   return {
     geocodeProvider: {
       async search(query, options) {
@@ -56,6 +86,11 @@ function buildDependencies(overrides: Partial<TimeInPlaceDependencies> = {}): Ti
           coords: { lat: 40.7128, long: -74.006 },
           source: "test-ip",
         });
+      },
+    },
+    skyEnvironmentProvider: {
+      async resolve() {
+        return defaultSkyEnvironment;
       },
     },
     now: () => 1_700_000_000_000,
@@ -285,6 +320,95 @@ describe("TimeInPlaceService", () => {
     ).toBe(false);
   });
 
+  test("computes sky colors with diagnostics and factor overrides", async () => {
+    let capturedTimezone = "";
+    const service = new TimeInPlaceService(
+      buildDependencies({
+        timezoneProvider: {
+          async resolve() {
+            return {
+              timezone: "Europe/Berlin",
+              offsetSeconds: 3600,
+            };
+          },
+        },
+        skyEnvironmentProvider: {
+          async resolve(_coords, _atMs, timezone) {
+            capturedTimezone = timezone;
+            return {
+              timezone,
+              samples: [
+                {
+                  timestampMs: 1_700_000_000_000,
+                  factors: {
+                    altitude: 0.1,
+                    turbidity: 0.2,
+                    humidity: 0.4,
+                    cloud_fraction: 0.3,
+                    ozone_factor: 0.4,
+                    light_pollution: 0.7,
+                  },
+                },
+              ],
+              diagnostics: {
+                factors: {
+                  altitude: { value: 0.1, source: "live", confidence: 0.9 },
+                  turbidity: { value: 0.2, source: "live", confidence: 0.8 },
+                  humidity: { value: 0.4, source: "live", confidence: 0.8 },
+                  cloud_fraction: { value: 0.3, source: "live", confidence: 0.8 },
+                  ozone_factor: { value: 0.4, source: "live", confidence: 0.7 },
+                  light_pollution: { value: 0.7, source: "live", confidence: 0.7 },
+                },
+                providerQuality: "live",
+                degraded: false,
+                fallbackReasons: [],
+              },
+            };
+          },
+        },
+      }),
+    );
+
+    const result = await service.getSkyColorForLocation(
+      { lat: 52.52, long: 13.405 },
+      {
+        factorOverrides: {
+          cloud_fraction: 0.95,
+        },
+      },
+    );
+
+    expect(capturedTimezone).toBe("Europe/Berlin");
+    expect(result.stops).toHaveLength(17);
+    expect(result.diagnostics.factors.cloud_fraction.source).toBe("override");
+  });
+
+  test("tuple sky wrappers return stops and rotation", async () => {
+    const service = new TimeInPlaceService(buildDependencies());
+    const [stops, rotationDeg] = await service.skyColourForLocationAndTime(
+      { lat: 40.7128, long: -74.006 },
+      1_710_000_000_000,
+    );
+
+    expect(stops.length).toBe(17);
+    expect(Number.isFinite(rotationDeg)).toBe(true);
+  });
+
+  test("can disable second-order transforms", async () => {
+    const service = new TimeInPlaceService(buildDependencies());
+    const result = await service.getSkyColorForLocation(
+      { lat: 40.7128, long: -74.006 },
+      {
+        applySecondOrder: false,
+      },
+    );
+
+    expect(result.stops).toHaveLength(17);
+    for (const stop of result.stops) {
+      expect(stop.shiftMinutes).toBe(0);
+    }
+  });
+
   test("throws validation errors for invalid input", async () => {
     const service = new TimeInPlaceService(buildDependencies());
 
@@ -294,6 +418,11 @@ describe("TimeInPlaceService", () => {
     });
 
     await expect(service.getTimeForLocation({ lat: 101, long: 0 })).rejects.toMatchObject({
+      code: "invalid_coordinates",
+      status: 400,
+    });
+
+    await expect(service.getSkyColorForLocation({ lat: 101, long: 0 })).rejects.toMatchObject({
       code: "invalid_coordinates",
       status: 400,
     });
@@ -315,6 +444,21 @@ describe("TimeInPlaceService", () => {
 
     await expect(service.lookupLocations("Paris")).rejects.toMatchObject({
       code: "geocode_lookup_failed",
+      status: 502,
+    });
+
+    const skyService = new TimeInPlaceService(
+      buildDependencies({
+        skyEnvironmentProvider: {
+          async resolve() {
+            throw new Error("sky env unavailable");
+          },
+        },
+      }),
+    );
+
+    await expect(skyService.getSkyColorForLocation({ lat: 48.8566, long: 2.3522 })).rejects.toMatchObject({
+      code: "sky_lookup_failed",
       status: 502,
     });
   });

@@ -53,4 +53,9 @@ bun run tui location
 - `POST /api/locations/persisted` with JSON body `{ "name": string, "lat": number, "long": number, "nickname"?: string, "timezone"?: string, "granularity"?: string }`
 - `DELETE /api/locations/persisted/:id`
 
+## Sky API
+
+- `GET /api/location/sky-24h?lat={number}&long={number}&at={unixMsOptional}`
+  - Returns `{ result }` with `stops[]`, `rotationDeg`, `rotationRad`, and always-on `diagnostics` including all six second-order factors and fallback metadata.
+
 This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.

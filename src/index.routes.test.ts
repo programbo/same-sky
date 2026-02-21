@@ -72,6 +72,39 @@ function createDependencies(): TimeInPlaceDependencies {
         });
       },
     },
+    skyEnvironmentProvider: {
+      async resolve(_coords, _atMs, timezone) {
+        return {
+          timezone,
+          samples: [
+            {
+              timestampMs: 1_700_000_000_000,
+              factors: {
+                altitude: 0.2,
+                turbidity: 0.4,
+                humidity: 0.5,
+                cloud_fraction: 0.3,
+                ozone_factor: 0.45,
+                light_pollution: 0.6,
+              },
+            },
+          ],
+          diagnostics: {
+            factors: {
+              altitude: { value: 0.2, source: "live", confidence: 0.9 },
+              turbidity: { value: 0.4, source: "live", confidence: 0.8 },
+              humidity: { value: 0.5, source: "live", confidence: 0.8 },
+              cloud_fraction: { value: 0.3, source: "live", confidence: 0.8 },
+              ozone_factor: { value: 0.45, source: "live", confidence: 0.7 },
+              light_pollution: { value: 0.6, source: "live", confidence: 0.7 },
+            },
+            providerQuality: "live",
+            degraded: false,
+            fallbackReasons: [],
+          },
+        };
+      },
+    },
     now: () => 1_700_000_000_000,
   };
 }
@@ -319,6 +352,81 @@ describe("route handlers", () => {
         error: {
           code: "invalid_coordinates",
           message: "lat and long query parameters are required.",
+        },
+      });
+    });
+  });
+
+  test("sky route returns stops, rotation, and diagnostics", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(
+        new URL("/api/location/sky-24h?lat=37.7749&long=-122.4194&at=1710000000000", baseUrl),
+      );
+      expect(response.status).toBe(200);
+
+      const payload = (await response.json()) as {
+        result: {
+          stops: Array<{ name: string; colorHex: string }>;
+          diagnostics: {
+            factors: {
+              altitude: { value: number };
+              turbidity: { value: number };
+              humidity: { value: number };
+              cloud_fraction: { value: number };
+              ozone_factor: { value: number };
+              light_pollution: { value: number };
+            };
+          };
+        };
+      };
+
+      expect(payload.result.stops).toHaveLength(17);
+      expect(payload.result.stops[0]?.name).toBe("local_midnight_start");
+      expect(payload.result.stops[0]?.colorHex.startsWith("#")).toBe(true);
+      expect(payload.result.diagnostics.factors.altitude.value).toBeGreaterThanOrEqual(0);
+      expect(payload.result.diagnostics.factors.light_pollution.value).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  test("sky route supports secondOrder=0", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(
+        new URL("/api/location/sky-24h?lat=37.7749&long=-122.4194&at=1710000000000&secondOrder=0", baseUrl),
+      );
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as {
+        result: {
+          stops: Array<{ shiftMinutes: number }>;
+        };
+      };
+
+      for (const stop of payload.result.stops) {
+        expect(stop.shiftMinutes).toBe(0);
+      }
+    });
+  });
+
+  test("sky route validates coordinates", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(new URL("/api/location/sky-24h?lat=999&long=0", baseUrl));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "invalid_coordinates",
+          message: "Coordinates must include lat in [-90, 90] and long in [-180, 180].",
+        },
+      });
+    });
+  });
+
+  test("sky route validates secondOrder flag", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(new URL("/api/location/sky-24h?lat=37.7749&long=-122.4194&secondOrder=maybe", baseUrl));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "invalid_second_order",
+          message: "secondOrder must be one of: 1, 0, true, false.",
         },
       });
     });

@@ -6,6 +6,7 @@ import type {
   TimeInPlaceDependencies,
   TimezoneProvider,
 } from "./contracts";
+import { createDefaultSkyEnvironmentProvider } from "./sky-providers";
 import {
   isLocalityGranularity,
   parseLocationGranularity,
@@ -524,6 +525,13 @@ export function createDefaultDependencies(options: ProviderFactoryOptions = {}):
     }),
     ipLocationProvider: createIpApiLocationProvider({
       ...requestOptions,
+      now,
+    }),
+    skyEnvironmentProvider: createDefaultSkyEnvironmentProvider({
+      fetchImpl: requestOptions.fetchImpl,
+      timeoutMs: requestOptions.timeoutMs,
+      retries: requestOptions.retries,
+      userAgent: options.userAgent ?? DEFAULT_USER_AGENT,
       now,
     }),
     now,

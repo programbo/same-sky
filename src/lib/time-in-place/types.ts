@@ -106,3 +106,98 @@ export interface CurrentLocationResult {
   coords: Coordinates;
   source: CurrentLocationSource;
 }
+
+export const SKY_STOP_NAMES = [
+  "local_midnight_start",
+  "astronomical_night",
+  "astronomical_dawn",
+  "nautical_dawn",
+  "civil_dawn",
+  "sunrise",
+  "morning_golden_hour",
+  "mid_morning",
+  "solar_noon",
+  "mid_afternoon",
+  "afternoon_golden_hour",
+  "sunset",
+  "civil_dusk",
+  "nautical_dusk",
+  "astronomical_dusk",
+  "late_night",
+  "local_midnight_end",
+] as const;
+
+export type SkyStopName = (typeof SKY_STOP_NAMES)[number];
+
+export const SKY_FACTOR_NAMES = [
+  "altitude",
+  "turbidity",
+  "humidity",
+  "cloud_fraction",
+  "ozone_factor",
+  "light_pollution",
+] as const;
+
+export type SkyFactorName = (typeof SKY_FACTOR_NAMES)[number];
+
+export interface SkySecondOrderFactors {
+  altitude: number;
+  turbidity: number;
+  humidity: number;
+  cloud_fraction: number;
+  ozone_factor: number;
+  light_pollution: number;
+}
+
+export interface SkyFactorSummary {
+  value: number;
+  source: "live" | "fallback" | "override";
+  confidence: number;
+  notes?: string[];
+}
+
+export interface SkyFactorDiagnostics {
+  factors: Record<SkyFactorName, SkyFactorSummary>;
+  providerQuality: "live" | "mixed" | "fallback";
+  degraded: boolean;
+  fallbackReasons: string[];
+}
+
+export interface SkyFactorSample {
+  timestampMs: number;
+  factors: SkySecondOrderFactors;
+}
+
+export interface SkyEnvironment {
+  timezone: string;
+  samples: SkyFactorSample[];
+  diagnostics: SkyFactorDiagnostics;
+}
+
+export interface SkyColorStop {
+  name: SkyStopName;
+  timestampMs: number;
+  minutesOfDay: number;
+  angleDeg: number;
+  colorHex: string;
+  shiftMinutes: number;
+  factors: SkySecondOrderFactors;
+}
+
+export interface Sky24hResult {
+  timestampMs: number;
+  timezone: string;
+  rotationDeg: number;
+  rotationRad: number;
+  stops: SkyColorStop[];
+  diagnostics: SkyFactorDiagnostics & {
+    interpolation: "hourly_linear";
+    polarConditionImputed: boolean;
+  };
+}
+
+export interface SkyComputationOptions {
+  atMs?: number;
+  factorOverrides?: Partial<SkySecondOrderFactors>;
+  applySecondOrder?: boolean;
+}
