@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { Database } from "bun:sqlite";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parseLocationGranularity, type Coordinates, type LocationGranularity } from "./types";
 
@@ -132,74 +133,155 @@ function toPersistedLocation(value: LegacyPersistedLocation | PersistedLocation)
   };
 }
 
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await readFile(filePath, "utf8");
-    return true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
-      return false;
-    }
-
-    throw error;
+function parseLegacyJsonStore(filePath: string): PersistedLocation[] {
+  if (!existsSync(filePath)) {
+    return [];
   }
+  const raw = readFileSync(filePath, "utf8");
+  if (!raw.trim()) {
+    return [];
+  }
+
+  const parsed = JSON.parse(raw) as Partial<PersistedStoreFile>;
+  if (!parsed || !Array.isArray(parsed.locations)) {
+    return [];
+  }
+
+  if (parsed.version !== 1 && parsed.version !== 2) {
+    return [];
+  }
+
+  return parsed.locations.filter(isLegacyPersistedLocation).map(toPersistedLocation);
+}
+
+interface PersistedLocationRow {
+  id: string;
+  name: string;
+  lat: number;
+  long: number;
+  nickname: string | null;
+  timezone: string | null;
+  granularity: string | null;
+  created_at_ms: number;
+}
+
+function rowToPersistedLocation(row: PersistedLocationRow): PersistedLocation {
+  return {
+    id: row.id,
+    name: row.name,
+    coords: {
+      lat: row.lat,
+      long: row.long,
+    },
+    nickname: normalizeNickname(row.nickname ?? undefined),
+    timezone: normalizeTimezone(row.timezone ?? undefined),
+    granularity: normalizeGranularity(row.granularity ?? undefined),
+    createdAtMs: row.created_at_ms,
+  };
 }
 
 export class PersistedLocationStore implements PersistedLocationStoreLike {
+  private readonly db: Database;
+
   constructor(
-    private readonly filePath = path.join(process.cwd(), "data", "persisted-locations.json"),
+    private readonly dbPath = path.join(process.cwd(), "data", "persisted-locations.db"),
     private readonly now: () => number = Date.now,
-  ) {}
-
-  private async readAll(): Promise<{ locations: PersistedLocation[]; migratedFromLegacy: boolean }> {
-    if (!(await fileExists(this.filePath))) {
-      return { locations: [], migratedFromLegacy: false };
+    private readonly legacyJsonPath = path.join(path.dirname(dbPath), "persisted-locations.json"),
+  ) {
+    if (this.dbPath !== ":memory:") {
+      mkdirSync(path.dirname(this.dbPath), { recursive: true });
     }
 
-    const raw = await readFile(this.filePath, "utf8");
-    if (!raw.trim()) {
-      return { locations: [], migratedFromLegacy: false };
-    }
-
-    const parsed = JSON.parse(raw) as Partial<PersistedStoreFile>;
-    if (!parsed || !Array.isArray(parsed.locations)) {
-      return { locations: [], migratedFromLegacy: false };
-    }
-
-    if (parsed.version === 1) {
-      const locations = parsed.locations.filter(isLegacyPersistedLocation).map(toPersistedLocation);
-      return { locations, migratedFromLegacy: true };
-    }
-
-    if (parsed.version === 2) {
-      const locations = parsed.locations.filter(isLegacyPersistedLocation).map(toPersistedLocation);
-      return { locations, migratedFromLegacy: false };
-    }
-
-    return { locations: [], migratedFromLegacy: false };
+    this.db = new Database(this.dbPath);
+    this.initialize();
   }
 
-  private async writeAll(locations: PersistedLocation[]): Promise<void> {
-    const directory = path.dirname(this.filePath);
-    await mkdir(directory, { recursive: true });
+  private initialize(): void {
+    this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db.exec("PRAGMA synchronous = NORMAL;");
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS persisted_locations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        lat REAL NOT NULL,
+        long REAL NOT NULL,
+        nickname TEXT,
+        timezone TEXT,
+        granularity TEXT,
+        created_at_ms INTEGER NOT NULL
+      );
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_persisted_locations_created_at
+      ON persisted_locations(created_at_ms DESC);
+    `);
 
-    const payload: PersistedStoreFileV2 = {
-      version: 2,
-      locations,
-    };
+    this.migrateFromLegacyJson();
+  }
 
-    const tempPath = `${this.filePath}.tmp`;
-    await writeFile(tempPath, JSON.stringify(payload, null, 2), "utf8");
-    await rename(tempPath, this.filePath);
+  private migrateFromLegacyJson(): void {
+    const row = this.db.query("SELECT COUNT(*) AS count FROM persisted_locations").get() as { count: number } | null;
+    const existingCount = row?.count ?? 0;
+    if (existingCount > 0) {
+      return;
+    }
+
+    const legacyLocations = parseLegacyJsonStore(this.legacyJsonPath);
+    if (legacyLocations.length === 0) {
+      return;
+    }
+
+    const insertStatement = this.db.prepare(`
+      INSERT OR IGNORE INTO persisted_locations (
+        id,
+        name,
+        lat,
+        long,
+        nickname,
+        timezone,
+        granularity,
+        created_at_ms
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const transaction = this.db.transaction((locations: PersistedLocation[]) => {
+      for (const location of locations) {
+        insertStatement.run(
+          location.id,
+          location.name,
+          location.coords.lat,
+          location.coords.long,
+          location.nickname ?? null,
+          location.timezone ?? null,
+          location.granularity ?? null,
+          location.createdAtMs,
+        );
+      }
+    });
+
+    transaction(legacyLocations);
   }
 
   async list(): Promise<PersistedLocation[]> {
-    const { locations, migratedFromLegacy } = await this.readAll();
-    if (migratedFromLegacy) {
-      await this.writeAll(locations);
-    }
+    const rows = this.db
+      .query(
+        `
+          SELECT
+            id,
+            name,
+            lat,
+            long,
+            nickname,
+            timezone,
+            granularity,
+            created_at_ms
+          FROM persisted_locations
+          ORDER BY created_at_ms DESC
+        `,
+      )
+      .all() as PersistedLocationRow[];
 
-    return [...locations].sort((left, right) => right.createdAtMs - left.createdAtMs);
+    return rows.map(rowToPersistedLocation);
   }
 
   async add(input: PersistLocationInput): Promise<PersistedLocation> {
@@ -210,11 +292,6 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
 
     if (!Number.isFinite(input.coords.lat) || !Number.isFinite(input.coords.long)) {
       throw new Error("Coordinates must be finite numbers.");
-    }
-
-    const { locations, migratedFromLegacy } = await this.readAll();
-    if (migratedFromLegacy) {
-      await this.writeAll(locations);
     }
 
     const entry: PersistedLocation = {
@@ -230,8 +307,31 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
       createdAtMs: this.now(),
     };
 
-    locations.push(entry);
-    await this.writeAll(locations);
+    this.db
+      .prepare(
+        `
+          INSERT INTO persisted_locations (
+            id,
+            name,
+            lat,
+            long,
+            nickname,
+            timezone,
+            granularity,
+            created_at_ms
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+      )
+      .run(
+        entry.id,
+        entry.name,
+        entry.coords.lat,
+        entry.coords.long,
+        entry.nickname ?? null,
+        entry.timezone ?? null,
+        entry.granularity ?? null,
+        entry.createdAtMs,
+      );
 
     return entry;
   }
@@ -242,19 +342,30 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
       return null;
     }
 
-    const { locations, migratedFromLegacy } = await this.readAll();
-    if (migratedFromLegacy) {
-      await this.writeAll(locations);
-    }
+    const row = this.db
+      .query(
+        `
+          SELECT
+            id,
+            name,
+            lat,
+            long,
+            nickname,
+            timezone,
+            granularity,
+            created_at_ms
+          FROM persisted_locations
+          WHERE id = ?
+        `,
+      )
+      .get(targetId) as PersistedLocationRow | null;
 
-    const index = locations.findIndex(location => location.id === targetId);
-    if (index < 0) {
+    if (!row) {
       return null;
     }
 
-    const [removed] = locations.splice(index, 1);
-    await this.writeAll(locations);
-    return removed ?? null;
+    this.db.prepare("DELETE FROM persisted_locations WHERE id = ?").run(targetId);
+    return rowToPersistedLocation(row);
   }
 
   async update(id: string, patch: PersistLocationPatch): Promise<PersistedLocation | null> {
@@ -263,33 +374,41 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
       return null;
     }
 
-    const { locations, migratedFromLegacy } = await this.readAll();
-    if (migratedFromLegacy) {
-      await this.writeAll(locations);
-    }
+    const row = this.db
+      .query(
+        `
+          SELECT
+            id,
+            name,
+            lat,
+            long,
+            nickname,
+            timezone,
+            granularity,
+            created_at_ms
+          FROM persisted_locations
+          WHERE id = ?
+        `,
+      )
+      .get(targetId) as PersistedLocationRow | null;
 
-    const index = locations.findIndex(location => location.id === targetId);
-    if (index < 0) {
+    if (!row) {
       return null;
     }
 
-    const existing = locations[index];
-    if (!existing) {
-      return null;
-    }
-
+    const existing = rowToPersistedLocation(row);
     const timezone = patch.timezone === undefined ? existing.timezone : normalizeTimezone(patch.timezone);
     const granularity =
       patch.granularity === undefined ? existing.granularity : normalizeGranularity(patch.granularity);
 
-    const updated: PersistedLocation = {
+    this.db
+      .prepare("UPDATE persisted_locations SET timezone = ?, granularity = ? WHERE id = ?")
+      .run(timezone ?? null, granularity ?? null, targetId);
+
+    return {
       ...existing,
       timezone,
       granularity,
     };
-
-    locations[index] = updated;
-    await this.writeAll(locations);
-    return updated;
   }
 }

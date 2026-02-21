@@ -1,10 +1,10 @@
 import { serve } from "bun";
 import index from "./index.html";
 import type { TimeInPlaceDependencies } from "./lib/time-in-place";
-import { createTimeInPlaceService, TimeInPlaceError, ValidationError, validateCoordinates } from "./lib/time-in-place";
+import { createTimeInPlaceService, SKY_FACTOR_NAMES, TimeInPlaceError, ValidationError, validateCoordinates } from "./lib/time-in-place";
 import { parseLocationGranularity, type BoundingBox, type Coordinates, type LocationGranularity } from "./lib/time-in-place";
 import { PersistedLocationStore } from "./lib/time-in-place";
-import type { PersistLocationInput, PersistedLocation, PersistedLocationStoreLike } from "./lib/time-in-place";
+import type { PersistLocationInput, PersistedLocation, PersistedLocationStoreLike, SkySecondOrderFactors } from "./lib/time-in-place";
 
 interface CreateServerOptions {
   port?: number;
@@ -176,6 +176,32 @@ function parseSecondOrderEnabled(params: URLSearchParams): boolean {
   }
 
   throw new ValidationError("invalid_second_order", "secondOrder must be one of: 1, 0, true, false.");
+}
+
+function parseFactorEnableOverrides(params: URLSearchParams): Partial<SkySecondOrderFactors> | undefined {
+  const overrides: Partial<SkySecondOrderFactors> = {};
+
+  for (const factorName of SKY_FACTOR_NAMES) {
+    const paramName = `factorEnabled_${factorName}`;
+    const raw = params.get(paramName);
+    if (raw === null) {
+      continue;
+    }
+
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "1" || normalized === "true") {
+      continue;
+    }
+
+    if (normalized === "0" || normalized === "false") {
+      overrides[factorName] = 0;
+      continue;
+    }
+
+    throw new ValidationError("invalid_factor_enabled", `${paramName} must be one of: 1, 0, true, false.`);
+  }
+
+  return Object.keys(overrides).length > 0 ? overrides : undefined;
 }
 
 function parsePersistLocationInput(payload: unknown): PersistLocationInput {
@@ -386,9 +412,11 @@ export function createServer(options: CreateServerOptions = {}) {
           const coords = parseRequiredCoordinates(url.searchParams);
           const atMs = parseOptionalTimestamp(url.searchParams);
           const applySecondOrder = parseSecondOrderEnabled(url.searchParams);
+          const factorOverrides = parseFactorEnableOverrides(url.searchParams);
           const result = await service.getSkyColorForLocation(coords, {
             atMs,
             applySecondOrder,
+            factorOverrides,
           });
 
           return Response.json({ result });
@@ -422,6 +450,21 @@ export function createServer(options: CreateServerOptions = {}) {
               timezone,
             });
             return Response.json({ result: toPersistedResponse(result) }, { status: 201 });
+          } catch (error) {
+            return errorResponse(error);
+          }
+        },
+      },
+
+      "/api/locations/persisted/debug-json": {
+        async GET() {
+          try {
+            const locations = await locationStore.list();
+            return Response.json({
+              version: 2,
+              storage: "sqlite",
+              locations,
+            });
           } catch (error) {
             return errorResponse(error);
           }

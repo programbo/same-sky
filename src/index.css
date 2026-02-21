@@ -116,6 +116,16 @@ label {
   letter-spacing: 0.08em;
 }
 
+.location-select-field {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.location-select {
+  width: 100%;
+  max-width: 100%;
+}
+
 input,
 select,
 button {
@@ -353,6 +363,11 @@ button.ghost {
   padding: 0.56rem;
 }
 
+.factor-card.is-disabled {
+  opacity: 0.72;
+  border-color: #76a2ba3d;
+}
+
 .factor-top-row {
   display: flex;
   justify-content: space-between;
@@ -360,12 +375,23 @@ button.ghost {
   gap: 0.5rem;
 }
 
-.factor-top-row p {
-  margin: 0;
-  font-weight: 600;
+.factor-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
 }
 
-.factor-top-row span {
+.factor-toggle input {
+  margin: 0;
+}
+
+.factor-toggle span {
+  font-weight: 600;
+  color: #e8f4ff;
+}
+
+.factor-top-row > span {
   font-family: "Courier New", monospace;
   color: #ffc777;
 }
@@ -387,7 +413,7 @@ button.ghost {
 
 .factor-card small {
   display: block;
-  margin-top: 0.42rem;
+  margin-top: 0.24rem;
   color: #a5c8db;
 }
 

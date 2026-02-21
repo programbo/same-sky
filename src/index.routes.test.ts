@@ -414,6 +414,36 @@ describe("route handlers", () => {
     });
   });
 
+  test("sky route supports per-factor enabled flags", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(
+        new URL(
+          "/api/location/sky-24h?lat=37.7749&long=-122.4194&at=1710000000000&factorEnabled_altitude=0&factorEnabled_cloud_fraction=false",
+          baseUrl,
+        ),
+      );
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as {
+        result: {
+          stops: Array<{ factors: { altitude: number; cloud_fraction: number } }>;
+          diagnostics: {
+            factors: {
+              altitude: { value: number; source: string };
+              cloud_fraction: { value: number; source: string };
+            };
+          };
+        };
+      };
+
+      expect(payload.result.diagnostics.factors.altitude.source).toBe("override");
+      expect(payload.result.diagnostics.factors.altitude.value).toBe(0);
+      expect(payload.result.diagnostics.factors.cloud_fraction.source).toBe("override");
+      expect(payload.result.diagnostics.factors.cloud_fraction.value).toBe(0);
+      expect(payload.result.stops[0]?.factors.altitude).toBe(0);
+      expect(payload.result.stops[0]?.factors.cloud_fraction).toBe(0);
+    });
+  });
+
   test("sky route validates coordinates", async () => {
     await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
       const response = await fetch(new URL("/api/location/sky-24h?lat=999&long=0", baseUrl));
@@ -435,6 +465,19 @@ describe("route handlers", () => {
         error: {
           code: "invalid_second_order",
           message: "secondOrder must be one of: 1, 0, true, false.",
+        },
+      });
+    });
+  });
+
+  test("sky route validates per-factor enabled flags", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(new URL("/api/location/sky-24h?lat=37.7749&long=-122.4194&factorEnabled_humidity=maybe", baseUrl));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({
+        error: {
+          code: "invalid_factor_enabled",
+          message: "factorEnabled_humidity must be one of: 1, 0, true, false.",
         },
       });
     });
@@ -623,6 +666,40 @@ describe("route handlers", () => {
           granularity: "city",
           createdAtMs: 1_700_000_000_010,
         },
+      });
+    });
+  });
+
+  test("exposes a read-only persisted-location JSON debug endpoint", async () => {
+    const store = createMemoryLocationStore([
+      {
+        id: "saved-a",
+        name: "Tokyo, Tokyo, Japan",
+        coords: { lat: 35.6762, long: 139.6503 },
+        nickname: "Work",
+        timezone: "Asia/Tokyo",
+        granularity: "city",
+        createdAtMs: 1_700_000_000_010,
+      },
+    ]);
+
+    await withServer(createDependencies(), store, async baseUrl => {
+      const response = await fetch(new URL("/api/locations/persisted/debug-json", baseUrl));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        version: 2,
+        storage: "sqlite",
+        locations: [
+          {
+            id: "saved-a",
+            name: "Tokyo, Tokyo, Japan",
+            coords: { lat: 35.6762, long: 139.6503 },
+            nickname: "Work",
+            timezone: "Asia/Tokyo",
+            granularity: "city",
+            createdAtMs: 1_700_000_000_010,
+          },
+        ],
       });
     });
   });

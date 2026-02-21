@@ -12,7 +12,7 @@ afterEach(async () => {
 describe("PersistedLocationStore", () => {
   test("adds and lists saved locations", async () => {
     let now = 1_700_000_000_000;
-    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.json"), () => now);
+    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.db"), () => now);
 
     const first = await store.add({
       name: "Paris, Ile-de-France, France",
@@ -41,7 +41,7 @@ describe("PersistedLocationStore", () => {
   });
 
   test("removes a saved location", async () => {
-    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.json"));
+    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.db"));
     const saved = await store.add({
       name: "New York, New York, United States",
       coords: { lat: 40.7128, long: -74.0060 },
@@ -57,13 +57,13 @@ describe("PersistedLocationStore", () => {
   });
 
   test("returns null when removing unknown id", async () => {
-    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.json"));
+    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.db"));
 
     expect(await store.remove("missing-id")).toBeNull();
   });
 
   test("updates timezone metadata for an existing location", async () => {
-    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.json"));
+    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.db"));
     const saved = await store.add({
       name: "Legacy",
       coords: { lat: 10, long: 11 },
@@ -74,11 +74,12 @@ describe("PersistedLocationStore", () => {
     expect(updated?.granularity).toBe("city");
   });
 
-  test("reads v1 files and rewrites them as v2 on list", async () => {
-    const filePath = path.join(TEST_DIR, "locations.json");
+  test("migrates v1 legacy JSON into sqlite on first run", async () => {
+    const dbPath = path.join(TEST_DIR, "locations.db");
+    const legacyPath = path.join(TEST_DIR, "persisted-locations.json");
     await mkdir(TEST_DIR, { recursive: true });
     await writeFile(
-      filePath,
+      legacyPath,
       JSON.stringify(
         {
           version: 1,
@@ -97,13 +98,14 @@ describe("PersistedLocationStore", () => {
       "utf8",
     );
 
-    const store = new PersistedLocationStore(filePath);
+    const store = new PersistedLocationStore(dbPath, Date.now, legacyPath);
     const listed = await store.list();
     expect(listed).toHaveLength(1);
+    expect(listed[0]?.id).toBe("legacy-1");
+    expect(listed[0]?.name).toBe("Legacy Place");
     expect(listed[0]?.timezone).toBeUndefined();
 
-    const raw = await Bun.file(filePath).text();
-    const parsed = JSON.parse(raw) as { version: number };
-    expect(parsed.version).toBe(2);
+    const listedAgain = await store.list();
+    expect(listedAgain).toHaveLength(1);
   });
 });

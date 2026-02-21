@@ -48,24 +48,27 @@ interface SkyApiResponse {
   result: Sky24hResult;
 }
 
+interface PersistedLocationApiResult {
+  id: string;
+  name: string;
+  lat: number;
+  long: number;
+  nickname?: string;
+  timezone?: string;
+  granularity?: string;
+  createdAtMs: number;
+}
+
+interface PersistedLocationsApiResponse {
+  results: PersistedLocationApiResult[];
+}
+
 interface ApiErrorResponse {
   error?: {
     code?: string;
     message?: string;
   };
 }
-
-interface LocationPreset extends Coordinates {
-  id: string;
-  label: string;
-}
-
-const PRESETS: LocationPreset[] = [
-  { id: "sf", label: "San Francisco", lat: 37.7749, long: -122.4194 },
-  { id: "reykjavik", label: "Reykjavik", lat: 64.1466, long: -21.9426 },
-  { id: "singapore", label: "Singapore", lat: 1.3521, long: 103.8198 },
-  { id: "ushuaia", label: "Ushuaia", lat: -54.8019, long: -68.303 },
-];
 
 const FACTOR_LABELS: Array<{ key: FactorKey; label: string }> = [
   { key: "altitude", label: "Altitude" },
@@ -76,8 +79,105 @@ const FACTOR_LABELS: Array<{ key: FactorKey; label: string }> = [
   { key: "light_pollution", label: "Light Pollution" },
 ];
 
+const DEFAULT_FACTOR_ENABLED: Record<FactorKey, boolean> = {
+  altitude: true,
+  turbidity: true,
+  humidity: true,
+  cloud_fraction: true,
+  ozone_factor: true,
+  light_pollution: true,
+};
+
 const HIGHLIGHT_STOPS = new Set(["sunrise", "solar_noon", "sunset", "astronomical_dawn", "astronomical_dusk"]);
 const WHEEL_TWEEN_MS = 650;
+const DEFAULT_COORDS: Coordinates = { lat: 0, long: 0 };
+const CUSTOM_LOCATION_OPTION = "custom";
+
+function toPersistedOptionId(id: string): string {
+  return `persisted:${id}`;
+}
+
+function getTimeZoneOffsetMinutes(timeZone: string, atMs: number): number | null {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).formatToParts(new Date(atMs));
+
+    const readPart = (type: Intl.DateTimeFormatPartTypes): number => {
+      const value = parts.find(part => part.type === type)?.value;
+      return Number(value);
+    };
+
+    const year = readPart("year");
+    const month = readPart("month");
+    const day = readPart("day");
+    const hour = readPart("hour");
+    const minute = readPart("minute");
+    const second = readPart("second");
+
+    if (![year, month, day, hour, minute, second].every(Number.isFinite)) {
+      return null;
+    }
+
+    const utcFromZoneParts = Date.UTC(year, month - 1, day, hour, minute, second);
+    return Math.round((utcFromZoneParts - atMs) / 60_000);
+  } catch {
+    return null;
+  }
+}
+
+function formatOffsetDelta(deltaMinutes: number): string {
+  const sign = deltaMinutes > 0 ? "+" : "-";
+  const absolute = Math.abs(deltaMinutes);
+  const hours = Math.floor(absolute / 60);
+  const minutes = absolute % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return `${sign}${hours}h ${minutes}m`;
+  }
+
+  if (hours > 0) {
+    return `${sign}${hours}h`;
+  }
+
+  return `${sign}${minutes}m`;
+}
+
+function getPersistedOffsetDeltaMinutes(location: PersistedLocationApiResult, atMs: number): number | null {
+  if (!location.timezone) {
+    return null;
+  }
+
+  const locationOffset = getTimeZoneOffsetMinutes(location.timezone, atMs);
+  if (locationOffset === null) {
+    return null;
+  }
+
+  const localOffset = -new Date(atMs).getTimezoneOffset();
+  return locationOffset - localOffset;
+}
+
+function formatPersistedOptionLabel(location: PersistedLocationApiResult, atMs: number): string {
+  const nickname = location.nickname?.trim();
+  const label = nickname || "Unnamed location";
+  const deltaMinutes = getPersistedOffsetDeltaMinutes(location, atMs);
+  if (deltaMinutes === 0) {
+    return label;
+  }
+
+  if (deltaMinutes === null) {
+    return label;
+  }
+
+  return `${label} (${formatOffsetDelta(deltaMinutes)})`;
+}
 
 function toDatetimeLocalInputValue(atMs: number): string {
   const date = new Date(atMs);
@@ -349,14 +449,17 @@ function formatStopName(value: string): string {
 }
 
 export function App() {
-  const [coords, setCoords] = useState<Coordinates>({ lat: PRESETS[0]!.lat, long: PRESETS[0]!.long });
-  const [selectedPreset, setSelectedPreset] = useState<string>(PRESETS[0]!.id);
+  const [coords, setCoords] = useState<Coordinates>(DEFAULT_COORDS);
+  const [selectedPreset, setSelectedPreset] = useState<string>(CUSTOM_LOCATION_OPTION);
+  const [persistedLocations, setPersistedLocations] = useState<PersistedLocationApiResult[]>([]);
   const [dateTimeLocal, setDateTimeLocal] = useState<string>(() => toDatetimeLocalInputValue(Date.now()));
   const [secondOrderEnabled, setSecondOrderEnabled] = useState<boolean>(true);
+  const [factorEnabled, setFactorEnabled] = useState<Record<FactorKey, boolean>>(() => ({ ...DEFAULT_FACTOR_ENABLED }));
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Sky24hResult | null>(null);
   const [animatedRingResult, setAnimatedRingResult] = useState<Sky24hResult | null>(null);
+  const initializedFromPersistedRef = useRef<boolean>(false);
   const animatedRingRef = useRef<Sky24hResult | null>(null);
   const tweenFrameRef = useRef<number | null>(null);
 
@@ -372,6 +475,83 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchPersistedLocations = async () => {
+      try {
+        const response = await fetch(new URL("/api/locations/persisted", window.location.origin));
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as PersistedLocationsApiResponse;
+        if (!cancelled) {
+          setPersistedLocations(Array.isArray(payload.results) ? payload.results : []);
+        }
+      } catch {
+        // Preserve existing UX even when persisted-location API is unavailable.
+      }
+    };
+
+    void fetchPersistedLocations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const optionLabelAtMs = useMemo(() => {
+    const parsed = Date.parse(dateTimeLocal);
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }, [dateTimeLocal]);
+
+  const selectableLocations = useMemo(() => {
+    return persistedLocations.map(location => ({
+      id: toPersistedOptionId(location.id),
+      lat: location.lat,
+      long: location.long,
+    }));
+  }, [persistedLocations]);
+
+  const sortedPersistedLocations = useMemo(() => {
+    const nicknameOf = (location: PersistedLocationApiResult) => location.nickname?.trim() || "Unnamed location";
+
+    return [...persistedLocations].sort((left, right) => {
+      const leftDelta = getPersistedOffsetDeltaMinutes(left, optionLabelAtMs);
+      const rightDelta = getPersistedOffsetDeltaMinutes(right, optionLabelAtMs);
+
+      if (leftDelta === null && rightDelta !== null) {
+        return 1;
+      }
+
+      if (leftDelta !== null && rightDelta === null) {
+        return -1;
+      }
+
+      if (leftDelta !== null && rightDelta !== null && leftDelta !== rightDelta) {
+        return leftDelta - rightDelta;
+      }
+
+      return nicknameOf(left).localeCompare(nicknameOf(right), undefined, { sensitivity: "base" });
+    });
+  }, [persistedLocations, optionLabelAtMs]);
+
+  useEffect(() => {
+    if (initializedFromPersistedRef.current || sortedPersistedLocations.length === 0) {
+      return;
+    }
+
+    const first = sortedPersistedLocations[0];
+    if (!first) {
+      return;
+    }
+
+    initializedFromPersistedRef.current = true;
+    setSelectedPreset(toPersistedOptionId(first.id));
+    setCoords({ lat: first.lat, long: first.long });
+  }, [sortedPersistedLocations]);
+
   const fetchSky = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -385,6 +565,9 @@ export function App() {
         url.searchParams.set("at", String(atMs));
       }
       url.searchParams.set("secondOrder", secondOrderEnabled ? "1" : "0");
+      for (const item of FACTOR_LABELS) {
+        url.searchParams.set(`factorEnabled_${item.key}`, factorEnabled[item.key] ? "1" : "0");
+      }
 
       const response = await fetch(url);
       const payload = (await response.json()) as SkyApiResponse | ApiErrorResponse;
@@ -427,7 +610,7 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  }, [coords.lat, coords.long, dateTimeLocal, secondOrderEnabled]);
+  }, [coords.lat, coords.long, dateTimeLocal, factorEnabled, secondOrderEnabled]);
 
   useEffect(() => {
     void fetchSky();
@@ -450,14 +633,18 @@ export function App() {
 
   const diagnostics = result?.diagnostics;
 
-  const handlePresetChange = (presetId: string) => {
-    setSelectedPreset(presetId);
-    const preset = PRESETS.find(item => item.id === presetId);
-    if (!preset) {
+  const handlePresetChange = (optionId: string) => {
+    setSelectedPreset(optionId);
+    if (optionId === CUSTOM_LOCATION_OPTION) {
       return;
     }
 
-    setCoords({ lat: preset.lat, long: preset.long });
+    const selected = selectableLocations.find(item => item.id === optionId);
+    if (!selected) {
+      return;
+    }
+
+    setCoords({ lat: selected.lat, long: selected.long });
   };
 
   const useCurrentLocation = () => {
@@ -472,7 +659,7 @@ export function App() {
           lat: clampCoordinate(position.coords.latitude, -90, 90),
           long: clampCoordinate(position.coords.longitude, -180, 180),
         });
-        setSelectedPreset("custom");
+        setSelectedPreset(CUSTOM_LOCATION_OPTION);
       },
       geolocationError => {
         setError(`Geolocation failed: ${geolocationError.message}`);
@@ -491,15 +678,19 @@ export function App() {
         </p>
 
         <div className="control-grid">
-          <label>
-            Location preset
-            <select value={selectedPreset} onChange={event => handlePresetChange(event.target.value)}>
-              {PRESETS.map(preset => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-              <option value="custom">Custom coordinates</option>
+          <label className="location-select-field">
+            Saved location
+            <select className="location-select" value={selectedPreset} onChange={event => handlePresetChange(event.target.value)}>
+              {sortedPersistedLocations.length > 0 ? (
+                <optgroup label="Persisted">
+                  {sortedPersistedLocations.map(location => (
+                    <option key={location.id} value={toPersistedOptionId(location.id)}>
+                      {formatPersistedOptionLabel(location, optionLabelAtMs)}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              <option value={CUSTOM_LOCATION_OPTION}>Custom coordinates</option>
             </select>
           </label>
 
@@ -509,7 +700,10 @@ export function App() {
               type="number"
               step="0.0001"
               value={coords.lat}
-              onChange={event => setCoords(current => ({ ...current, lat: clampCoordinate(Number(event.target.value), -90, 90) }))}
+              onChange={event => {
+                setSelectedPreset(CUSTOM_LOCATION_OPTION);
+                setCoords(current => ({ ...current, lat: clampCoordinate(Number(event.target.value), -90, 90) }));
+              }}
             />
           </label>
 
@@ -519,7 +713,10 @@ export function App() {
               type="number"
               step="0.0001"
               value={coords.long}
-              onChange={event => setCoords(current => ({ ...current, long: clampCoordinate(Number(event.target.value), -180, 180) }))}
+              onChange={event => {
+                setSelectedPreset(CUSTOM_LOCATION_OPTION);
+                setCoords(current => ({ ...current, long: clampCoordinate(Number(event.target.value), -180, 180) }));
+              }}
             />
           </label>
 
@@ -598,20 +795,35 @@ export function App() {
           {FACTOR_LABELS.map(item => {
             const factor = diagnostics?.factors[item.key];
             const value = factor?.value ?? 0;
+            const percentage = Math.round(value * 100);
+            const enabled = factorEnabled[item.key];
 
             return (
-              <article key={item.key} className="factor-card">
+              <article key={item.key} className={`factor-card${enabled ? "" : " is-disabled"}`}>
                 <div className="factor-top-row">
-                  <p>{item.label}</p>
-                  <span>{Math.round(value * 100)}%</span>
+                  <label className="factor-toggle">
+                    <input
+                      type="checkbox"
+                      checked={enabled}
+                      onChange={event => {
+                        const checked = event.target.checked;
+                        setFactorEnabled(current => ({
+                          ...current,
+                          [item.key]: checked,
+                        }));
+                      }}
+                      disabled={loading || !secondOrderEnabled}
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                  <span>{percentage}%</span>
                 </div>
                 <div className="factor-track">
-                  <div className="factor-fill" style={{ width: `${Math.round(value * 100)}%` }} />
+                  <div className="factor-fill" style={{ width: `${percentage}%` }} />
                 </div>
-                <small>
-                  {(factor?.source ?? "-")}
-                  {factor ? ` | confidence ${Math.round(factor.confidence * 100)}%` : ""}
-                </small>
+                <small>Data source: {factor?.source ?? "-"}</small>
+                <small>Data: {factor ? `${value.toFixed(3)} (${percentage}%)` : "-"}</small>
+                <small>Confidence: {factor ? `${Math.round(factor.confidence * 100)}%` : "-"}</small>
               </article>
             );
           })}

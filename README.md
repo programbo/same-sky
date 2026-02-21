@@ -51,7 +51,10 @@ bun run tui location
 
 - `GET /api/locations/persisted`
 - `POST /api/locations/persisted` with JSON body `{ "name": string, "lat": number, "long": number, "nickname"?: string, "timezone"?: string, "granularity"?: string }`
+- `GET /api/locations/persisted/debug-json` (read-only debug dump)
 - `DELETE /api/locations/persisted/:id`
+
+Persisted locations are stored in SQLite at `data/persisted-locations.db` (legacy `data/persisted-locations.json` is imported automatically when the database is empty).
 
 ## Sky API
 
