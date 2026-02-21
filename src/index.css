@@ -236,7 +236,7 @@ button.ghost {
     inset 0 0 0 0.6px #ffffff1c,
     0 14px 34px #02090f8f,
     0 0 22px #5ac2ff42;
-  transition: transform 350ms ease;
+  will-change: transform, background-image;
 }
 
 .sky-wheel-inner {

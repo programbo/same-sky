@@ -179,6 +179,14 @@ async function withServer(
 }
 
 describe("route handlers", () => {
+  test("redirects root to /ring-renderer", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(new URL("/", baseUrl), { redirect: "manual" });
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toContain("/ring-renderer");
+    });
+  });
+
   test("keeps existing hello route working", async () => {
     await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
       const response = await fetch(new URL("/api/hello", baseUrl));

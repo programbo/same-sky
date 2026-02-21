@@ -286,7 +286,11 @@ export function createServer(options: CreateServerOptions = {}) {
   return serve({
     port: options.port,
     routes: {
-      // Serve index.html for all unmatched routes.
+      // Keep the app mounted at /ring-renderer and redirect root traffic there.
+      "/": () => Response.redirect("/ring-renderer", 302),
+      "/ring-renderer": index,
+
+      // Serve index.html for other unmatched frontend routes (deep links).
       "/*": index,
 
       "/api/hello": {

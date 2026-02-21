@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./index.css";
 
 type FactorKey = "altitude" | "turbidity" | "humidity" | "cloud_fraction" | "ozone_factor" | "light_pollution";
@@ -77,6 +77,7 @@ const FACTOR_LABELS: Array<{ key: FactorKey; label: string }> = [
 ];
 
 const HIGHLIGHT_STOPS = new Set(["sunrise", "solar_noon", "sunset", "astronomical_dawn", "astronomical_dusk"]);
+const WHEEL_TWEEN_MS = 650;
 
 function toDatetimeLocalInputValue(atMs: number): string {
   const date = new Date(atMs);
@@ -132,9 +133,9 @@ function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): 
   );
 }
 
-function buildConicGradient(stops: SkyStop[], rotationDeg = 0): string {
+function buildConicGradient(stops: SkyStop[]): string {
   if (stops.length === 0) {
-    return `conic-gradient(from ${rotationDeg}deg, #08121b, #0e273a, #08121b)`;
+    return "conic-gradient(from 0deg, #08121b, #0e273a, #08121b)";
   }
 
   const rawPoints = stops
@@ -146,7 +147,7 @@ function buildConicGradient(stops: SkyStop[], rotationDeg = 0): string {
     .sort((left, right) => left.minute - right.minute);
 
   if (rawPoints.length === 0) {
-    return `conic-gradient(from ${rotationDeg}deg, #08121b, #0e273a, #08121b)`;
+    return "conic-gradient(from 0deg, #08121b, #0e273a, #08121b)";
   }
 
   const points: Array<{ color: string; minute: number }> = [];
@@ -166,7 +167,7 @@ function buildConicGradient(stops: SkyStop[], rotationDeg = 0): string {
   }
 
   if (!points[0]) {
-    return `conic-gradient(from ${rotationDeg}deg, #08121b, #0e273a, #08121b)`;
+    return "conic-gradient(from 0deg, #08121b, #0e273a, #08121b)";
   }
 
   if (points[0].minute > 0) {
@@ -176,7 +177,7 @@ function buildConicGradient(stops: SkyStop[], rotationDeg = 0): string {
 
   const cleanedPoints = points.filter(point => point.minute < 1440);
   if (cleanedPoints.length === 0) {
-    return `conic-gradient(from ${rotationDeg}deg, #08121b, #0e273a, #08121b)`;
+    return "conic-gradient(from 0deg, #08121b, #0e273a, #08121b)";
   }
 
   const sampleColorAtMinute = (minute: number): string => {
@@ -239,7 +240,75 @@ function buildConicGradient(stops: SkyStop[], rotationDeg = 0): string {
     segments.push(`${sampleColorAtMinute(0)} 100%`);
   }
 
-  return `conic-gradient(from ${rotationDeg}deg, ${segments.join(", ")})`;
+  return `conic-gradient(from 0deg, ${segments.join(", ")})`;
+}
+
+function lerp(from: number, to: number, t: number): number {
+  return from + (to - from) * t;
+}
+
+function normalizeDegrees(degrees: number): number {
+  return ((degrees + 180) % 360 + 360) % 360 - 180;
+}
+
+function shortestAngleDelta(from: number, to: number): number {
+  return normalizeDegrees(to - from);
+}
+
+function easeInOutCubic(t: number): number {
+  if (t < 0.5) {
+    return 4 * t * t * t;
+  }
+
+  return 1 - ((-2 * t + 2) ** 3) / 2;
+}
+
+function lerpCircular(from: number, to: number, modulus: number, t: number): number {
+  const diff = ((to - from + modulus / 2) % modulus + modulus) % modulus - modulus / 2;
+  return ((from + diff * t) % modulus + modulus) % modulus;
+}
+
+function interpolateSkyStop(from: SkyStop, to: SkyStop, t: number): SkyStop {
+  const isMidnightStart = to.name === "local_midnight_start";
+  const isMidnightEnd = to.name === "local_midnight_end";
+
+  const minutesOfDay = isMidnightStart
+    ? 0
+    : isMidnightEnd
+      ? 1440
+      : lerpCircular(from.minutesOfDay, to.minutesOfDay, 1440, t);
+
+  return {
+    ...to,
+    timestampMs: Math.round(lerp(from.timestampMs, to.timestampMs, t)),
+    minutesOfDay,
+    angleDeg: (minutesOfDay / 1440) * 360,
+    colorHex: rgbToHex({
+      r: lerp(hexToRgb(from.colorHex).r, hexToRgb(to.colorHex).r, t),
+      g: lerp(hexToRgb(from.colorHex).g, hexToRgb(to.colorHex).g, t),
+      b: lerp(hexToRgb(from.colorHex).b, hexToRgb(to.colorHex).b, t),
+    }),
+    shiftMinutes: Math.round(lerp(from.shiftMinutes, to.shiftMinutes, t)),
+  };
+}
+
+function interpolateSkyResult(from: Sky24hResult, to: Sky24hResult, t: number): Sky24hResult {
+  const stopByName = new Map(from.stops.map(stop => [stop.name, stop] as const));
+  const interpolatedStops = to.stops.map(stop => {
+    const source = stopByName.get(stop.name);
+    return source ? interpolateSkyStop(source, stop, t) : stop;
+  });
+
+  const rotationDeg = normalizeDegrees(from.rotationDeg + shortestAngleDelta(from.rotationDeg, to.rotationDeg) * t);
+  const rotationRad = (rotationDeg * Math.PI) / 180;
+
+  return {
+    ...to,
+    timestampMs: Math.round(lerp(from.timestampMs, to.timestampMs, t)),
+    rotationDeg,
+    rotationRad,
+    stops: interpolatedStops,
+  };
 }
 
 function formatStopTime(timestampMs: number, timezone: string): string {
@@ -287,6 +356,21 @@ export function App() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Sky24hResult | null>(null);
+  const [animatedRingResult, setAnimatedRingResult] = useState<Sky24hResult | null>(null);
+  const animatedRingRef = useRef<Sky24hResult | null>(null);
+  const tweenFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    animatedRingRef.current = animatedRingResult;
+  }, [animatedRingResult]);
+
+  useEffect(() => {
+    return () => {
+      if (tweenFrameRef.current !== null) {
+        cancelAnimationFrame(tweenFrameRef.current);
+      }
+    };
+  }, []);
 
   const fetchSky = useCallback(async () => {
     setLoading(true);
@@ -311,6 +395,32 @@ export function App() {
 
       const data = payload as SkyApiResponse;
       setResult(data.result);
+      if (!animatedRingRef.current) {
+        setAnimatedRingResult(data.result);
+      } else {
+        const from = animatedRingRef.current;
+        const to = data.result;
+        const startMs = performance.now();
+
+        if (tweenFrameRef.current !== null) {
+          cancelAnimationFrame(tweenFrameRef.current);
+        }
+
+        const tick = (nowMs: number) => {
+          const rawProgress = Math.max(0, Math.min(1, (nowMs - startMs) / WHEEL_TWEEN_MS));
+          const eased = easeInOutCubic(rawProgress);
+          setAnimatedRingResult(interpolateSkyResult(from, to, eased));
+
+          if (rawProgress < 1) {
+            tweenFrameRef.current = requestAnimationFrame(tick);
+          } else {
+            tweenFrameRef.current = null;
+            setAnimatedRingResult(to);
+          }
+        };
+
+        tweenFrameRef.current = requestAnimationFrame(tick);
+      }
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : String(requestError);
       setError(message);
@@ -323,10 +433,12 @@ export function App() {
     void fetchSky();
   }, [fetchSky]);
 
+  const baseWheelResult = animatedRingResult ?? result;
   const wheelGradient = useMemo(
-    () => buildConicGradient(result?.stops ?? [], result?.rotationDeg ?? 0),
-    [result],
+    () => buildConicGradient(baseWheelResult?.stops ?? []),
+    [baseWheelResult],
   );
+  const wheelRotationDeg = baseWheelResult?.rotationDeg ?? result?.rotationDeg ?? 0;
 
   const highlightedStops = useMemo(() => {
     if (!result) {
@@ -443,11 +555,12 @@ export function App() {
             className="sky-wheel"
             style={{
               backgroundImage: wheelGradient,
+              transform: `rotate(${wheelRotationDeg}deg)`,
             }}
           />
           <div className="sky-wheel-inner">
             <p className="inner-label">Current top alignment</p>
-            <p className="inner-rotation">{result ? `${result.rotationDeg.toFixed(1)} deg` : "-"}</p>
+            <p className="inner-rotation">{baseWheelResult ? `${baseWheelResult.rotationDeg.toFixed(1)} deg` : "-"}</p>
             <p className="inner-timezone">{result?.timezone ?? "Loading timezone..."}</p>
           </div>
           <div className="top-indicator" />
