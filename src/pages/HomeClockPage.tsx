@@ -125,7 +125,7 @@ const ZENITH_TOKENS: ConceptTokens = {
   ringSizeMaxPx: 1240,
   bandWidthPct: 20,
   haloSpreadPx: 190,
-  labelBaseRadiusPct: 0.41,
+  labelBaseRadiusPct: 0.29,
   laneStepPx: 24,
 }
 
@@ -407,7 +407,6 @@ function splitUtcOffsetParts(offsetMinutes: number): UtcOffsetParts {
 
 const HOUR_TREND = createCircularTrend(24)
 const MINUTE_TREND = createCircularTrend(60)
-const SECOND_TREND = createCircularTrend(60)
 
 function getMinutesOfDayInZone(timeZone: string | undefined, atMs: number): number | null {
   try {
@@ -637,10 +636,6 @@ export function HomeClockPage() {
     centerTimeParts !== null &&
     previousCenterTimePartsRef.current !== null &&
     centerTimeParts.minute !== previousCenterTimePartsRef.current.minute
-  const shouldAnimateSecond =
-    centerTimeParts !== null &&
-    previousCenterTimePartsRef.current !== null &&
-    centerTimeParts.second !== previousCenterTimePartsRef.current.second
   const shouldAnimateUtcHours = centerUtcOffsetParts.hours !== previousCenterUtcOffsetPartsRef.current.hours
   const shouldAnimateUtcMinutes = centerUtcOffsetParts.minutes !== previousCenterUtcOffsetPartsRef.current.minutes
   const displayCenterTimeRef = useRef<string>(displayCenterTime)
@@ -1206,19 +1201,9 @@ export function HomeClockPage() {
                       digits={{ 1: { max: 5 } }}
                       format={{ minimumIntegerDigits: 2, useGrouping: false }}
                     />
-                    <span className="home-center-time-separator">:</span>
-                    <NumberFlow
-                      className="home-center-time-flow"
-                      value={centerTimeParts.second}
-                      animated={shouldAnimateSecond}
-                      plugins={NUMBER_FLOW_PLUGINS}
-                      trend={SECOND_TREND}
-                      digits={{ 1: { max: 5 } }}
-                      format={{ minimumIntegerDigits: 2, useGrouping: false }}
-                    />
                   </>
                 ) : (
-                  displayCenterTime
+                  displayCenterTime.slice(0, 5)
                 )}
               </p>
               <p className="home-center-meta-label">UTC offset</p>
@@ -1283,7 +1268,7 @@ export function HomeClockPage() {
 
           <div className="home-label-orbit" role="listbox" aria-label="Saved locations by 24 hour offset">
             {orbitLabels.map((label) => {
-              const baseRadius = ringDiameter > 0 ? ringDiameter * 0.34 : 150
+              const baseRadius = ringDiameter > 0 ? ringDiameter * 0.25 : 115
               const radiusPx = Math.max(baseRadius, labelBaseRadiusPx + label.radialOffsetPx)
               const orbitAngleDeg = label.angleDeg
               return (
