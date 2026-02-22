@@ -12,7 +12,7 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_RETRIES = 1;
-const DEFAULT_USER_AGENT = "time-in-place/0.1 (+https://example.local)";
+const DEFAULT_USER_AGENT = "same-sky/0.1 (+https://same-sky.app)";
 
 const WEATHER_CACHE_TTL_MS = 20 * 60 * 1000;
 const AIR_CACHE_TTL_MS = 30 * 60 * 1000;

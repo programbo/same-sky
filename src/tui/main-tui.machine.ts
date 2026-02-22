@@ -1,5 +1,5 @@
 import { assign, fromPromise, setup } from "xstate";
-import type { PersistedLocationStoreLike, TimeInPlaceService } from "../lib/time-in-place";
+import type { PersistedLocationStoreLike, SameSkyService } from "../lib/same-sky";
 import { locationManagementMachine } from "./location-management.machine";
 import type { AppFeatureChoice, TuiUi } from "./ui-contract";
 
@@ -7,7 +7,7 @@ interface MainTuiContext {
   argv: string[];
   verbose: boolean;
   ui: TuiUi;
-  service: TimeInPlaceService;
+  service: SameSkyService;
   store: PersistedLocationStoreLike;
   fatalError: string | null;
 }
@@ -16,7 +16,7 @@ interface MainTuiInput {
   argv: string[];
   verbose?: boolean;
   ui: TuiUi;
-  service: TimeInPlaceService;
+  service: SameSkyService;
   store: PersistedLocationStoreLike;
 }
 

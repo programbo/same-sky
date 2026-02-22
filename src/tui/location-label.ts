@@ -1,5 +1,5 @@
-import { normalizeCacheToken } from "../lib/time-in-place/cache";
-import type { LocationMatch } from "../lib/time-in-place/types";
+import { normalizeCacheToken } from "../lib/same-sky/cache";
+import type { LocationMatch } from "../lib/same-sky/types";
 
 const ENGLISH_REGION_NAMES = new Intl.DisplayNames(["en"], { type: "region" });
 

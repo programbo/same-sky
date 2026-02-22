@@ -1,5 +1,5 @@
-import type { PersistedLocation } from "../lib/time-in-place";
-import type { LocationMatch } from "../lib/time-in-place";
+import type { PersistedLocation } from "../lib/same-sky";
+import type { LocationMatch } from "../lib/same-sky";
 
 export type AppFeatureChoice = "location" | "exit";
 

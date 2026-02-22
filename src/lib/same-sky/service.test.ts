@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { TimeInPlaceDependencies } from "./contracts";
-import { TimeInPlaceService, isLocationSelectableForSky } from "./service";
+import type { SameSkyDependencies } from "./contracts";
+import { SameSkyService, isLocationSelectableForSky } from "./service";
 import type { Coordinates, LocationMatch, SkyEnvironment } from "./types";
 
 function makeMatch(overrides: Partial<LocationMatch> = {}): LocationMatch {
@@ -22,7 +22,7 @@ function makeMatch(overrides: Partial<LocationMatch> = {}): LocationMatch {
   };
 }
 
-function buildDependencies(overrides: Partial<TimeInPlaceDependencies> = {}): TimeInPlaceDependencies {
+function buildDependencies(overrides: Partial<SameSkyDependencies> = {}): SameSkyDependencies {
   const defaultSkyEnvironment: SkyEnvironment = {
     timezone: "UTC",
     samples: [
@@ -98,12 +98,12 @@ function buildDependencies(overrides: Partial<TimeInPlaceDependencies> = {}): Ti
   };
 }
 
-describe("TimeInPlaceService", () => {
+describe("SameSkyService", () => {
   test("normalizes lookup query, clamps limit, and enriches timezone preview", async () => {
     let receivedQuery = "";
     let receivedLimit = 0;
 
-    const service = new TimeInPlaceService(
+    const service = new SameSkyService(
       buildDependencies({
         geocodeProvider: {
           async search(query, options): Promise<LocationMatch[]> {
@@ -144,7 +144,7 @@ describe("TimeInPlaceService", () => {
     let capturedScope: LocationMatch["boundingBox"] | undefined;
     let capturedLocalityOnly = false;
 
-    const service = new TimeInPlaceService(
+    const service = new SameSkyService(
       buildDependencies({
         geocodeProvider: {
           async search(_query, options): Promise<LocationMatch[]> {
@@ -186,7 +186,7 @@ describe("TimeInPlaceService", () => {
   });
 
   test("degrades gracefully when timezone preview lookup fails", async () => {
-    const service = new TimeInPlaceService(
+    const service = new SameSkyService(
       buildDependencies({
         geocodeProvider: {
           async search() {
@@ -209,7 +209,7 @@ describe("TimeInPlaceService", () => {
   });
 
   test("tuple locationLookup wrapper returns top five", async () => {
-    const service = new TimeInPlaceService(
+    const service = new SameSkyService(
       buildDependencies({
         geocodeProvider: {
           async search() {
@@ -237,7 +237,7 @@ describe("TimeInPlaceService", () => {
   test("uses browser coordinates and reverse geocoding for current location", async () => {
     const browserCoords: Coordinates = { lat: 37.7749, long: -122.4194 };
 
-    const service = new TimeInPlaceService(
+    const service = new SameSkyService(
       buildDependencies({
         geocodeProvider: {
           async search() {
@@ -264,7 +264,7 @@ describe("TimeInPlaceService", () => {
   });
 
   test("falls back to ip location when browser coords are not provided", async () => {
-    const service = new TimeInPlaceService(buildDependencies());
+    const service = new SameSkyService(buildDependencies());
     const result = await service.getCurrentLocation();
 
     expect(result.source).toBe("ip");
@@ -275,7 +275,7 @@ describe("TimeInPlaceService", () => {
     const timestampMs = 1_710_000_000_000;
     const coords = { lat: 40.7128, long: -74.006 };
 
-    const service = new TimeInPlaceService(
+    const service = new SameSkyService(
       buildDependencies({
         now: () => timestampMs,
         timezoneProvider: {
@@ -322,7 +322,7 @@ describe("TimeInPlaceService", () => {
 
   test("computes sky colors with diagnostics and factor overrides", async () => {
     let capturedTimezone = "";
-    const service = new TimeInPlaceService(
+    const service = new SameSkyService(
       buildDependencies({
         timezoneProvider: {
           async resolve() {
@@ -384,7 +384,7 @@ describe("TimeInPlaceService", () => {
   });
 
   test("tuple sky wrappers return stops and rotation", async () => {
-    const service = new TimeInPlaceService(buildDependencies());
+    const service = new SameSkyService(buildDependencies());
     const [stops, rotationDeg] = await service.skyColourForLocationAndTime(
       { lat: 40.7128, long: -74.006 },
       1_710_000_000_000,
@@ -395,7 +395,7 @@ describe("TimeInPlaceService", () => {
   });
 
   test("can disable second-order transforms", async () => {
-    const service = new TimeInPlaceService(buildDependencies());
+    const service = new SameSkyService(buildDependencies());
     const result = await service.getSkyColorForLocation(
       { lat: 40.7128, long: -74.006 },
       {
@@ -410,7 +410,7 @@ describe("TimeInPlaceService", () => {
   });
 
   test("throws validation errors for invalid input", async () => {
-    const service = new TimeInPlaceService(buildDependencies());
+    const service = new SameSkyService(buildDependencies());
 
     await expect(service.lookupLocations("   ")).rejects.toMatchObject({
       code: "invalid_query",
@@ -429,7 +429,7 @@ describe("TimeInPlaceService", () => {
   });
 
   test("maps provider failures to upstream errors", async () => {
-    const service = new TimeInPlaceService(
+    const service = new SameSkyService(
       buildDependencies({
         geocodeProvider: {
           async search() {
@@ -447,7 +447,7 @@ describe("TimeInPlaceService", () => {
       status: 502,
     });
 
-    const skyService = new TimeInPlaceService(
+    const skyService = new SameSkyService(
       buildDependencies({
         skyEnvironmentProvider: {
           async resolve() {

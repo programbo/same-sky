@@ -7,8 +7,8 @@ import type {
   PersistLocationPatch,
   PersistedLocation,
   PersistedLocationStoreLike,
-} from "../lib/time-in-place";
-import type { TimeInPlaceService } from "../lib/time-in-place";
+} from "../lib/same-sky";
+import type { SameSkyService } from "../lib/same-sky";
 import { locationManagementMachine } from "./location-management.machine";
 import type { AppFeatureChoice, LocationActionChoice, RefinementActionChoice, TuiUi } from "./ui-contract";
 
@@ -141,7 +141,7 @@ function createStubUi(queues: UiQueues): TuiUi {
 
 describe("locationManagementMachine", () => {
   test("does not force refinement for small country-sized areas", async () => {
-    const service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation"> = {
+    const service: Pick<SameSkyService, "lookupLocations" | "getTimeForLocation"> = {
       async lookupLocations(query) {
         if (query.toLowerCase() === "singapore") {
           return [
@@ -207,7 +207,7 @@ describe("locationManagementMachine", () => {
 
   test("requires narrowing from broad region to locality before persisting", async () => {
     const calls: Array<{ query: string; localityOnly?: boolean }> = [];
-    const service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation"> = {
+    const service: Pick<SameSkyService, "lookupLocations" | "getTimeForLocation"> = {
       async lookupLocations(query, options) {
         calls.push({ query, localityOnly: options?.localityOnly });
         if (query === "Australia") {
@@ -309,7 +309,7 @@ describe("locationManagementMachine", () => {
     };
     const calls: Array<{ query: string; localityOnly?: boolean; scopeBoundingBox?: BoundingBox }> = [];
 
-    const service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation"> = {
+    const service: Pick<SameSkyService, "lookupLocations" | "getTimeForLocation"> = {
       async lookupLocations(query, options) {
         calls.push({
           query,
@@ -416,7 +416,7 @@ describe("locationManagementMachine", () => {
   });
 
   test("deduplicates repeated scope labels while preserving english context", async () => {
-    const service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation"> = {
+    const service: Pick<SameSkyService, "lookupLocations" | "getTimeForLocation"> = {
       async lookupLocations(query) {
         if (query.trim().toLowerCase() === "greenland") {
           return [
@@ -503,7 +503,7 @@ describe("locationManagementMachine", () => {
       },
     ]);
 
-    const service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation"> = {
+    const service: Pick<SameSkyService, "lookupLocations" | "getTimeForLocation"> = {
       async lookupLocations() {
         return [];
       },

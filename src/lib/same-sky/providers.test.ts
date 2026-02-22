@@ -49,7 +49,7 @@ describe("createDefaultDependencies geocode provider", () => {
 
     const deps = createDefaultDependencies({
       fetchImpl,
-      userAgent: "time-in-place/test",
+      userAgent: "same-sky/test",
       now: () => 1_700_000_000_000,
     });
 

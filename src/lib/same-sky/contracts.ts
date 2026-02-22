@@ -23,7 +23,7 @@ export interface SkyEnvironmentProvider {
   resolve(coords: Coordinates, atMs: number, timezone: string): Promise<SkyEnvironment>;
 }
 
-export interface TimeInPlaceDependencies {
+export interface SameSkyDependencies {
   geocodeProvider: GeocodeProvider;
   timezoneProvider: TimezoneProvider;
   ipLocationProvider: IpLocationProvider;

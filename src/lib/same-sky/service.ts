@@ -1,5 +1,5 @@
 import { normalizeCacheToken } from "./cache";
-import type { CurrentLocationOptions, LookupOptions, TimeInPlaceDependencies } from "./contracts";
+import type { CurrentLocationOptions, LookupOptions, SameSkyDependencies } from "./contracts";
 import { angleForTimeOffset } from "./math";
 import { createDefaultDependencies } from "./providers";
 import { computeSky24h } from "./sky";
@@ -60,13 +60,13 @@ function createFallbackSkyEnvironment(timezone: string, atMs: number): SkyEnviro
   };
 }
 
-export class TimeInPlaceError extends Error {
+export class SameSkyError extends Error {
   public readonly code: string;
   public readonly status: number;
 
   constructor(code: string, status: number, message: string, cause?: unknown) {
     super(message);
-    this.name = "TimeInPlaceError";
+    this.name = "SameSkyError";
     this.code = code;
     this.status = status;
     if (cause !== undefined) {
@@ -75,14 +75,14 @@ export class TimeInPlaceError extends Error {
   }
 }
 
-export class ValidationError extends TimeInPlaceError {
+export class ValidationError extends SameSkyError {
   constructor(code: string, message: string) {
     super(code, 400, message);
     this.name = "ValidationError";
   }
 }
 
-export class UpstreamError extends TimeInPlaceError {
+export class UpstreamError extends SameSkyError {
   constructor(code: string, message: string, cause?: unknown) {
     super(code, 502, message, cause);
     this.name = "UpstreamError";
@@ -135,11 +135,11 @@ export function isLocationSelectableForSky(match: Pick<LocationMatch, "isLocalit
   return match.isLocalityClass;
 }
 
-export class TimeInPlaceService {
-  constructor(private readonly deps: TimeInPlaceDependencies) {}
+export class SameSkyService {
+  constructor(private readonly deps: SameSkyDependencies) {}
 
   private rethrowAsUpstream(code: string, message: string, error: unknown): never {
-    if (error instanceof TimeInPlaceError) {
+    if (error instanceof SameSkyError) {
       throw error;
     }
 
@@ -341,9 +341,9 @@ export class TimeInPlaceService {
   }
 }
 
-export function createTimeInPlaceService(dependencies?: Partial<TimeInPlaceDependencies>): TimeInPlaceService {
+export function createSameSkyService(dependencies?: Partial<SameSkyDependencies>): SameSkyService {
   const defaultDependencies = createDefaultDependencies();
-  return new TimeInPlaceService({
+  return new SameSkyService({
     ...defaultDependencies,
     ...dependencies,
   });

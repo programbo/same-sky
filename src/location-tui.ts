@@ -1,5 +1,5 @@
 import { waitFor, createActor } from "xstate";
-import { PersistedLocationStore, createTimeInPlaceService } from "./lib/time-in-place";
+import { PersistedLocationStore, createSameSkyService } from "./lib/same-sky";
 import { mainTuiMachine } from "./tui/main-tui.machine";
 import { createInquirerUi } from "./tui/inquirer-ui";
 
@@ -12,7 +12,7 @@ async function run(): Promise<void> {
     input: {
       argv,
       verbose,
-      service: createTimeInPlaceService(),
+      service: createSameSkyService(),
       store: new PersistedLocationStore(),
       ui: createInquirerUi(),
     },

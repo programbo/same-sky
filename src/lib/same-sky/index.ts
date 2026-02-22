@@ -1,4 +1,4 @@
-import { createTimeInPlaceService } from "./service";
+import { createSameSkyService } from "./service";
 
 export * from "./types";
 export * from "./contracts";
@@ -10,7 +10,7 @@ export * from "./sky-providers";
 export * from "./service";
 export * from "./persisted-locations";
 
-const defaultService = createTimeInPlaceService();
+const defaultService = createSameSkyService();
 
 export const lookupLocations = defaultService.lookupLocations.bind(defaultService);
 export const getCurrentLocation = defaultService.getCurrentLocation.bind(defaultService);

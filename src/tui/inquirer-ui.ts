@@ -1,7 +1,7 @@
 import { checkbox, input, select } from "@inquirer/prompts";
 import { emitKeypressEvents } from "node:readline";
 import { stdin } from "node:process";
-import type { LocationMatch, PersistedLocation } from "../lib/time-in-place";
+import type { LocationMatch, PersistedLocation } from "../lib/same-sky";
 import { formatLocationLabel } from "./location-label";
 import type { AppFeatureChoice, LocationActionChoice, RefinementActionChoice, TuiUi } from "./ui-contract";
 

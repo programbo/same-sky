@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { TimeInPlaceDependencies } from "./lib/time-in-place";
-import type { LocationMatch, PersistLocationInput, PersistLocationPatch, PersistedLocation, PersistedLocationStoreLike } from "./lib/time-in-place";
+import type { SameSkyDependencies } from "./lib/same-sky";
+import type { LocationMatch, PersistLocationInput, PersistLocationPatch, PersistedLocation, PersistedLocationStoreLike } from "./lib/same-sky";
 import { createServer } from "./index";
 
 function makeMatch(overrides: Partial<LocationMatch> = {}): LocationMatch {
@@ -22,7 +22,7 @@ function makeMatch(overrides: Partial<LocationMatch> = {}): LocationMatch {
   };
 }
 
-function createDependencies(): TimeInPlaceDependencies {
+function createDependencies(): SameSkyDependencies {
   return {
     geocodeProvider: {
       async search(query, options) {
@@ -180,7 +180,7 @@ function createMemoryLocationStore(seed: PersistedLocation[] = []): PersistedLoc
 }
 
 async function withServer(
-  dependencies: TimeInPlaceDependencies,
+  dependencies: SameSkyDependencies,
   locationStore: PersistedLocationStoreLike,
   run: (baseUrl: URL) => Promise<void>,
 ): Promise<void> {
@@ -207,12 +207,13 @@ describe("route handlers", () => {
     });
   });
 
-  test("keeps existing hello route working", async () => {
+  test("serves status route", async () => {
     await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
-      const response = await fetch(new URL("/api/hello", baseUrl));
+      const response = await fetch(new URL("/api/status", baseUrl));
       expect(response.status).toBe(200);
       expect(await response.json()).toEqual({
-        message: "Hello, world!",
+        app: "same-sky",
+        status: "ok",
         method: "GET",
       });
     });
@@ -760,6 +761,8 @@ describe("route handlers", () => {
             nickname: "Work",
             timezone: "Asia/Tokyo",
             granularity: "city",
+            adminState: "Ile-de-France",
+            adminCity: "Paris",
             kind: "location",
             createdAtMs: 1_700_000_000_010,
           },
@@ -770,6 +773,8 @@ describe("route handlers", () => {
             long: -0.1276,
             timezone: "Europe/London",
             granularity: "city",
+            adminState: "Ile-de-France",
+            adminCity: "Paris",
             kind: "location",
             createdAtMs: 1_700_000_000_000,
           },
@@ -787,6 +792,8 @@ describe("route handlers", () => {
           nickname: "Work",
           timezone: "Asia/Tokyo",
           granularity: "city",
+          adminState: "Ile-de-France",
+          adminCity: "Paris",
           kind: "location",
           createdAtMs: 1_700_000_000_010,
         },
@@ -860,6 +867,9 @@ describe("route handlers", () => {
             lat: 40.7128,
             long: -74.006,
             timezone: "America/New_York",
+            granularity: "city",
+            adminState: "Ile-de-France",
+            adminCity: "Paris",
             kind: "location",
             createdAtMs: 1_700_000_000_000,
           },

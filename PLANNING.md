@@ -1,4 +1,4 @@
-# Many Times - Multi-location clock
+# Same Sky - Multi-location clock
 
 ## 24 hours, multiple-location clock UI
 

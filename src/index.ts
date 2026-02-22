@@ -1,21 +1,21 @@
 import { serve } from "bun";
 import { createHash } from "node:crypto";
 import index from "./index.html";
-import type { TimeInPlaceDependencies } from "./lib/time-in-place";
-import { createTimeInPlaceService, SKY_FACTOR_NAMES, TimeInPlaceError, ValidationError, validateCoordinates } from "./lib/time-in-place";
-import { parseLocationGranularity, type BoundingBox, type Coordinates, type LocationGranularity } from "./lib/time-in-place";
-import { PERSISTED_AVATAR_SOURCES, PERSISTED_LOCATION_KINDS, type PersistedAvatarSource, type PersistedLocationKind } from "./lib/time-in-place";
-import { PersistedLocationStore } from "./lib/time-in-place";
-import type { PersistLocationInput, PersistLocationPatch, PersistedLocation, PersistedLocationStoreLike, SkySecondOrderFactors } from "./lib/time-in-place";
+import type { SameSkyDependencies } from "./lib/same-sky";
+import { createSameSkyService, SKY_FACTOR_NAMES, SameSkyError, ValidationError, validateCoordinates } from "./lib/same-sky";
+import { parseLocationGranularity, type BoundingBox, type Coordinates, type LocationGranularity } from "./lib/same-sky";
+import { PERSISTED_AVATAR_SOURCES, PERSISTED_LOCATION_KINDS, type PersistedAvatarSource, type PersistedLocationKind } from "./lib/same-sky";
+import { PersistedLocationStore } from "./lib/same-sky";
+import type { PersistLocationInput, PersistLocationPatch, PersistedLocation, PersistedLocationStoreLike, SkySecondOrderFactors } from "./lib/same-sky";
 
 interface CreateServerOptions {
   port?: number;
-  dependencies?: Partial<TimeInPlaceDependencies>;
+  dependencies?: Partial<SameSkyDependencies>;
   locationStore?: PersistedLocationStoreLike;
 }
 
 function errorResponse(error: unknown): Response {
-  if (error instanceof TimeInPlaceError) {
+  if (error instanceof SameSkyError) {
     return Response.json(
       {
         error: {
@@ -428,7 +428,7 @@ function toPersistedResponse(location: PersistedLocation): {
 
 async function hydratePersistedLocation(
   location: PersistedLocation,
-  service: ReturnType<typeof createTimeInPlaceService>,
+  service: ReturnType<typeof createSameSkyService>,
   locationStore: PersistedLocationStoreLike,
 ): Promise<PersistedLocation> {
   const needsTimezone = !location.timezone;
@@ -497,7 +497,7 @@ function hasDuplicateWithoutNickname(
 }
 
 function schedulePersistedLocationBackfill(
-  service: ReturnType<typeof createTimeInPlaceService>,
+  service: ReturnType<typeof createSameSkyService>,
   locationStore: PersistedLocationStoreLike,
 ): void {
   setTimeout(() => {
@@ -515,7 +515,7 @@ function schedulePersistedLocationBackfill(
 }
 
 export function createServer(options: CreateServerOptions = {}) {
-  const service = createTimeInPlaceService(options.dependencies);
+  const service = createSameSkyService(options.dependencies);
   const locationStore = options.locationStore ?? new PersistedLocationStore();
   if (!options.locationStore) {
     schedulePersistedLocationBackfill(service, locationStore);
@@ -530,25 +530,27 @@ export function createServer(options: CreateServerOptions = {}) {
       // Serve index.html for other unmatched frontend routes (deep links).
       "/*": index,
 
-      "/api/hello": {
+      "/api/status": {
         async GET() {
           return Response.json({
-            message: "Hello, world!",
+            app: "same-sky",
+            status: "ok",
             method: "GET",
           });
         },
         async PUT() {
           return Response.json({
-            message: "Hello, world!",
+            app: "same-sky",
+            status: "ok",
             method: "PUT",
           });
         },
       },
 
-      "/api/hello/:name": async req => {
+      "/api/status/:name": async req => {
         const name = req.params.name;
         return Response.json({
-          message: `Hello, ${name}!`,
+          message: `Same Sky says hello to ${name}.`,
         });
       },
 

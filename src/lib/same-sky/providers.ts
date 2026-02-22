@@ -3,7 +3,7 @@ import type {
   GeocodeSearchOptions,
   GeocodeProvider,
   IpLocationProvider,
-  TimeInPlaceDependencies,
+  SameSkyDependencies,
   TimezoneProvider,
 } from "./contracts";
 import { createDefaultSkyEnvironmentProvider } from "./sky-providers";
@@ -21,7 +21,7 @@ const IP_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_RETRIES = 1;
-const DEFAULT_USER_AGENT = "time-in-place/0.1 (+https://example.local)";
+const DEFAULT_USER_AGENT = "same-sky/0.1 (+https://same-sky.app)";
 
 type FetchImpl = typeof fetch;
 
@@ -570,7 +570,7 @@ function createIpApiLocationProvider(options: RequestOptions & { now: () => numb
   };
 }
 
-export function createDefaultDependencies(options: ProviderFactoryOptions = {}): TimeInPlaceDependencies {
+export function createDefaultDependencies(options: ProviderFactoryOptions = {}): SameSkyDependencies {
   const now = options.now ?? Date.now;
   const requestOptions: RequestOptions = {
     fetchImpl: options.fetchImpl ?? fetch,

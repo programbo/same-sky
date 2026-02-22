@@ -1,4 +1,4 @@
-# bun-react-tailwind-template
+# Same Sky
 
 To install dependencies:
 
@@ -61,4 +61,4 @@ Persisted locations are stored in SQLite at `data/persisted-locations.db` (legac
 - `GET /api/location/sky-24h?lat={number}&long={number}&at={unixMsOptional}`
   - Returns `{ result }` with `stops[]`, `rotationDeg`, `rotationRad`, and always-on `diagnostics` including all six second-order factors and fallback metadata.
 
-This project was created using `bun init` in bun v1.3.8. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+Same Sky is a Bun-powered app for visualizing local time and sky state across locations.

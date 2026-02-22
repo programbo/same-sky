@@ -41,9 +41,9 @@ export function APITester() {
         <input
           type="text"
           name="endpoint"
-          defaultValue="/api/hello"
+          defaultValue="/api/status"
           className="w-full flex-1 bg-transparent border-0 text-[#fbf0df] font-mono text-base py-1.5 px-2 outline-none focus:text-white placeholder-[#fbf0df]/40"
-          placeholder="/api/hello"
+          placeholder="/api/status"
         />
         <button
           type="submit"

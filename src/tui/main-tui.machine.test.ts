@@ -6,8 +6,8 @@ import type {
   PersistLocationPatch,
   PersistedLocation,
   PersistedLocationStoreLike,
-  TimeInPlaceService,
-} from "../lib/time-in-place";
+  SameSkyService,
+} from "../lib/same-sky";
 import { mainTuiMachine } from "./main-tui.machine";
 import type { AppFeatureChoice, LocationActionChoice, RefinementActionChoice, TuiUi } from "./ui-contract";
 
@@ -64,7 +64,7 @@ class MemoryStore implements PersistedLocationStoreLike {
   }
 }
 
-function createServiceStub(): TimeInPlaceService {
+function createServiceStub(): SameSkyService {
   return {
     async lookupLocations(): Promise<LocationMatch[]> {
       return [];
@@ -76,7 +76,7 @@ function createServiceStub(): TimeInPlaceService {
         offsetSeconds: 0,
       };
     },
-  } as unknown as TimeInPlaceService;
+  } as unknown as SameSkyService;
 }
 
 interface MainUiOptions {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { LocationMatch } from "../lib/time-in-place/types";
+import type { LocationMatch } from "../lib/same-sky/types";
 import { formatLocationLabel } from "./location-label";
 
 function makeMatch(overrides: Partial<LocationMatch> = {}): LocationMatch {

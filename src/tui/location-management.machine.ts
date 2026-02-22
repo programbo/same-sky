@@ -4,9 +4,9 @@ import type {
   LocationMatch,
   PersistedLocation,
   PersistedLocationStoreLike,
-  TimeInPlaceService,
-} from "../lib/time-in-place";
-import { isLocationSelectableForSky, normalizeCacheToken } from "../lib/time-in-place";
+  SameSkyService,
+} from "../lib/same-sky";
+import { isLocationSelectableForSky, normalizeCacheToken } from "../lib/same-sky";
 import { formatLocationLabel } from "./location-label";
 import type { LocationActionChoice, RefinementActionChoice, TuiUi } from "./ui-contract";
 
@@ -23,7 +23,7 @@ interface RemovalOutcome {
 }
 
 interface LocationMachineContext {
-  service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation">;
+  service: Pick<SameSkyService, "lookupLocations" | "getTimeForLocation">;
   store: PersistedLocationStoreLike;
   ui: TuiUi;
   verbose: boolean;
@@ -44,7 +44,7 @@ interface LocationMachineContext {
 }
 
 interface LocationMachineInput {
-  service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation">;
+  service: Pick<SameSkyService, "lookupLocations" | "getTimeForLocation">;
   store: PersistedLocationStoreLike;
   ui: TuiUi;
   verbose?: boolean;
@@ -424,7 +424,7 @@ export const locationManagementMachine = setup({
         input,
       }: {
         input: {
-          service: Pick<TimeInPlaceService, "lookupLocations">;
+          service: Pick<SameSkyService, "lookupLocations">;
           query: string;
           scopeBoundingBox: BoundingBox | null;
           localityOnly: boolean;
@@ -474,7 +474,7 @@ export const locationManagementMachine = setup({
         input,
       }: {
         input: {
-          service: Pick<TimeInPlaceService, "getTimeForLocation">;
+          service: Pick<SameSkyService, "getTimeForLocation">;
           selectedResult: LocationMatch | null;
         };
       }): Promise<SelectionAnalysis> => {
@@ -582,7 +582,7 @@ export const locationManagementMachine = setup({
         input,
       }: {
         input: {
-          service: Pick<TimeInPlaceService, "getTimeForLocation">;
+          service: Pick<SameSkyService, "getTimeForLocation">;
           store: PersistedLocationStoreLike;
           selectedResult: LocationMatch | null;
           nickname: string;

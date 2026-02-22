@@ -2,11 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import NumberFlow from "@number-flow/react"
 import { continuous } from "number-flow/plugins"
 import "../home-clock.css"
-import { computeSky24h } from "../lib/time-in-place/sky"
+import { computeSky24h } from "../lib/same-sky/sky"
 import type {
   SkyEnvironment as SharedSkyEnvironment,
   SkySecondOrderFactors as SharedSkySecondOrderFactors,
-} from "../lib/time-in-place/types"
+} from "../lib/same-sky/types"
 
 type PersistedKind = "location" | "entity"
 
@@ -96,7 +96,7 @@ interface UtcOffsetParts {
   minutes: number
 }
 
-const STORAGE_SELECTED_ID = "tip_home_selected_item_id"
+const STORAGE_SELECTED_ID = "same_sky_home_selected_item_id"
 const MOBILE_BREAKPOINT = 740
 const SKY_REFRESH_MS = 60_000
 const SELECTION_TRANSITION_MS = 780

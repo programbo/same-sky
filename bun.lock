@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bun-react-template",
+      "name": "same-sky",
       "dependencies": {
         "@inquirer/prompts": "^8.2.1",
         "@number-flow/react": "^0.5.12",
