@@ -40,8 +40,12 @@ export const LOCALITY_GRANULARITIES: ReadonlySet<LocationGranularity> = new Set<
 
 export interface LocationAdmin {
   country?: string;
+  countryCode?: string;
   region?: string;
+  state?: string;
   locality?: string;
+  city?: string;
+  suburb?: string;
 }
 
 const LOCATION_GRANULARITY_SET = new Set<string>(LOCATION_GRANULARITIES);
@@ -82,6 +86,7 @@ export function isLocalityGranularity(granularity: LocationGranularity): boolean
 export interface LocationMatch {
   id: string;
   name: string;
+  englishName?: string;
   fullName: string;
   coords: Coordinates;
   source: string;

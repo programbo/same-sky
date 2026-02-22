@@ -1,10 +1,12 @@
 import { serve } from "bun";
+import { createHash } from "node:crypto";
 import index from "./index.html";
 import type { TimeInPlaceDependencies } from "./lib/time-in-place";
 import { createTimeInPlaceService, SKY_FACTOR_NAMES, TimeInPlaceError, ValidationError, validateCoordinates } from "./lib/time-in-place";
 import { parseLocationGranularity, type BoundingBox, type Coordinates, type LocationGranularity } from "./lib/time-in-place";
+import { PERSISTED_AVATAR_SOURCES, PERSISTED_LOCATION_KINDS, type PersistedAvatarSource, type PersistedLocationKind } from "./lib/time-in-place";
 import { PersistedLocationStore } from "./lib/time-in-place";
-import type { PersistLocationInput, PersistedLocation, PersistedLocationStoreLike, SkySecondOrderFactors } from "./lib/time-in-place";
+import type { PersistLocationInput, PersistLocationPatch, PersistedLocation, PersistedLocationStoreLike, SkySecondOrderFactors } from "./lib/time-in-place";
 
 interface CreateServerOptions {
   port?: number;
@@ -216,6 +218,16 @@ function parsePersistLocationInput(payload: unknown): PersistLocationInput {
   const nickname = record.nickname;
   const timezone = record.timezone;
   const granularity = record.granularity;
+  const kind = record.kind;
+  const entityName = record.entityName;
+  const countryCode = record.countryCode;
+  const adminState = record.adminState;
+  const adminCity = record.adminCity;
+  const adminSuburb = record.adminSuburb;
+  const avatarSource = record.avatarSource;
+  const avatarImageUrl = record.avatarImageUrl;
+  const gravatarHash = record.gravatarHash;
+  const gravatarEmail = record.gravatarEmail;
 
   if (typeof name !== "string" || !name.trim()) {
     throw new ValidationError("invalid_name", "name is required and must be a non-empty string.");
@@ -233,6 +245,63 @@ function parsePersistLocationInput(payload: unknown): PersistLocationInput {
     throw new ValidationError("invalid_timezone", "timezone must be a non-empty string when provided.");
   }
 
+  let parsedKind: PersistedLocationKind | undefined;
+  if (kind !== undefined) {
+    if (typeof kind !== "string") {
+      throw new ValidationError("invalid_kind", "kind must be a string when provided.");
+    }
+
+    const normalized = kind.trim().toLowerCase();
+    if (!PERSISTED_LOCATION_KINDS.includes(normalized as PersistedLocationKind)) {
+      throw new ValidationError("invalid_kind", `kind must be one of: ${PERSISTED_LOCATION_KINDS.join(", ")}.`);
+    }
+
+    parsedKind = normalized as PersistedLocationKind;
+  }
+
+  if (entityName !== undefined && typeof entityName !== "string") {
+    throw new ValidationError("invalid_entity_name", "entityName must be a string when provided.");
+  }
+  if (countryCode !== undefined && typeof countryCode !== "string") {
+    throw new ValidationError("invalid_country_code", "countryCode must be a string when provided.");
+  }
+  if (adminState !== undefined && typeof adminState !== "string") {
+    throw new ValidationError("invalid_admin_state", "adminState must be a string when provided.");
+  }
+  if (adminCity !== undefined && typeof adminCity !== "string") {
+    throw new ValidationError("invalid_admin_city", "adminCity must be a string when provided.");
+  }
+  if (adminSuburb !== undefined && typeof adminSuburb !== "string") {
+    throw new ValidationError("invalid_admin_suburb", "adminSuburb must be a string when provided.");
+  }
+
+  let parsedAvatarSource: PersistedAvatarSource | undefined;
+  if (avatarSource !== undefined) {
+    if (typeof avatarSource !== "string") {
+      throw new ValidationError("invalid_avatar_source", "avatarSource must be a string when provided.");
+    }
+
+    const normalized = avatarSource.trim().toLowerCase();
+    if (!PERSISTED_AVATAR_SOURCES.includes(normalized as PersistedAvatarSource)) {
+      throw new ValidationError(
+        "invalid_avatar_source",
+        `avatarSource must be one of: ${PERSISTED_AVATAR_SOURCES.join(", ")}.`,
+      );
+    }
+
+    parsedAvatarSource = normalized as PersistedAvatarSource;
+  }
+
+  if (avatarImageUrl !== undefined && typeof avatarImageUrl !== "string") {
+    throw new ValidationError("invalid_avatar_image_url", "avatarImageUrl must be a string when provided.");
+  }
+  if (gravatarHash !== undefined && typeof gravatarHash !== "string") {
+    throw new ValidationError("invalid_gravatar_hash", "gravatarHash must be a string when provided.");
+  }
+  if (gravatarEmail !== undefined && typeof gravatarEmail !== "string") {
+    throw new ValidationError("invalid_gravatar_email", "gravatarEmail must be a string when provided.");
+  }
+
   let parsedGranularity: LocationGranularity | undefined;
   if (granularity !== undefined) {
     if (typeof granularity !== "string") {
@@ -245,13 +314,68 @@ function parsePersistLocationInput(payload: unknown): PersistLocationInput {
   const coords = { lat, long };
   validateCoordinates(coords);
 
+  const normalizeOptionalString = (value: unknown): string | undefined => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  };
+
+  const rawHash = normalizeOptionalString(gravatarHash);
+  const computedHashFromEmail = normalizeOptionalString(gravatarEmail);
+  const normalizedGravatarHash = rawHash
+    ? rawHash.toLowerCase()
+      : computedHashFromEmail
+        ? createHash("md5").update(computedHashFromEmail.toLowerCase(), "utf8").digest("hex")
+        : undefined;
+  const normalizedEntityName = normalizeOptionalString(entityName);
+
+  if (parsedKind === "entity" && !normalizedEntityName) {
+    throw new ValidationError("invalid_entity_name", "entityName is required when kind is entity.");
+  }
+
   return {
     name: name.trim(),
     coords,
     nickname,
     timezone: timezone?.trim(),
     granularity: parsedGranularity,
+    kind: parsedKind,
+    entityName: normalizedEntityName,
+    countryCode: normalizeOptionalString(countryCode)?.toUpperCase(),
+    adminState: normalizeOptionalString(adminState),
+    adminCity: normalizeOptionalString(adminCity),
+    adminSuburb: normalizeOptionalString(adminSuburb),
+    avatarSource: parsedAvatarSource,
+    avatarImageUrl: normalizeOptionalString(avatarImageUrl),
+    gravatarHash: normalizedGravatarHash,
   };
+}
+
+function parsePersistLocationPatch(payload: unknown): PersistLocationPatch {
+  if (!payload || typeof payload !== "object") {
+    throw new ValidationError("invalid_payload", "JSON body is required.");
+  }
+
+  const record = payload as Record<string, unknown>;
+  const patch: PersistLocationPatch = {};
+
+  const nickname = record.nickname;
+  if (nickname !== undefined) {
+    if (typeof nickname !== "string") {
+      throw new ValidationError("invalid_nickname", "nickname must be a string when provided.");
+    }
+
+    patch.nickname = nickname;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    throw new ValidationError("invalid_payload", "At least one editable field must be provided.");
+  }
+
+  return patch;
 }
 
 async function parseJsonBody(req: Request): Promise<unknown> {
@@ -270,6 +394,15 @@ function toPersistedResponse(location: PersistedLocation): {
   nickname?: string;
   timezone?: string;
   granularity?: LocationGranularity;
+  kind: PersistedLocationKind;
+  entityName?: string;
+  countryCode?: string;
+  adminState?: string;
+  adminCity?: string;
+  adminSuburb?: string;
+  avatarSource?: PersistedAvatarSource;
+  avatarImageUrl?: string;
+  gravatarHash?: string;
   createdAtMs: number;
 } {
   return {
@@ -280,6 +413,15 @@ function toPersistedResponse(location: PersistedLocation): {
     nickname: location.nickname,
     timezone: location.timezone,
     granularity: location.granularity,
+    kind: location.kind ?? "location",
+    entityName: location.entityName,
+    countryCode: location.countryCode,
+    adminState: location.adminState,
+    adminCity: location.adminCity,
+    adminSuburb: location.adminSuburb,
+    avatarSource: location.avatarSource,
+    avatarImageUrl: location.avatarImageUrl,
+    gravatarHash: location.gravatarHash,
     createdAtMs: location.createdAtMs,
   };
 }
@@ -289,31 +431,100 @@ async function hydratePersistedLocation(
   service: ReturnType<typeof createTimeInPlaceService>,
   locationStore: PersistedLocationStoreLike,
 ): Promise<PersistedLocation> {
-  if (location.timezone) {
+  const needsTimezone = !location.timezone;
+  const needsAdminMetadata = !location.countryCode || !location.adminCity || !location.adminState;
+  if (!needsTimezone && !needsAdminMetadata) {
     return location;
   }
 
-  const resolved = await service.getTimeForLocation(location.coords);
-  const updated = await locationStore.update(location.id, { timezone: resolved.timezone });
+  const patch: PersistLocationPatch = {};
+  if (needsTimezone) {
+    const resolved = await service.getTimeForLocation(location.coords);
+    patch.timezone = resolved.timezone;
+  }
+
+  if (needsAdminMetadata) {
+    try {
+      const results = await service.lookupLocations(location.name, {
+        limit: 1,
+        includeTimezonePreview: false,
+      });
+      const first = results[0];
+      if (first) {
+        patch.countryCode = first.admin.countryCode;
+        patch.adminState = first.admin.state ?? first.admin.region;
+        patch.adminCity = first.admin.city ?? first.admin.locality;
+        patch.adminSuburb = first.admin.suburb;
+        patch.granularity = location.granularity ?? first.granularity;
+      }
+    } catch {
+      // Backfill is best-effort; keep serving location data if enrichment fails.
+    }
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return location;
+  }
+
+  const updated = await locationStore.update(location.id, patch);
   if (updated) {
     return updated;
   }
 
   return {
     ...location,
-    timezone: resolved.timezone,
+    ...patch,
+    kind: location.kind ?? "location",
   };
+}
+
+function roundCoord(value: number): number {
+  return Number(value.toFixed(4));
+}
+
+function hasDuplicateWithoutNickname(
+  input: PersistLocationInput,
+  existing: PersistedLocation[],
+): boolean {
+  const hasNickname = Boolean(input.nickname?.trim().length);
+  if (hasNickname) {
+    return false;
+  }
+
+  const lat = roundCoord(input.coords.lat);
+  const long = roundCoord(input.coords.long);
+  return existing.some(location => roundCoord(location.coords.lat) === lat && roundCoord(location.coords.long) === long);
+}
+
+function schedulePersistedLocationBackfill(
+  service: ReturnType<typeof createTimeInPlaceService>,
+  locationStore: PersistedLocationStoreLike,
+): void {
+  setTimeout(() => {
+    void (async () => {
+      try {
+        const listed = await locationStore.list();
+        for (const location of listed) {
+          await hydratePersistedLocation(location, service, locationStore);
+        }
+      } catch (error) {
+        console.warn("Persisted-location metadata backfill failed.", error);
+      }
+    })();
+  }, 0);
 }
 
 export function createServer(options: CreateServerOptions = {}) {
   const service = createTimeInPlaceService(options.dependencies);
   const locationStore = options.locationStore ?? new PersistedLocationStore();
+  if (!options.locationStore) {
+    schedulePersistedLocationBackfill(service, locationStore);
+  }
 
   return serve({
     port: options.port,
     routes: {
-      // Keep the app mounted at /ring-renderer and redirect root traffic there.
-      "/": () => Response.redirect("/ring-renderer", 302),
+      "/": index,
       "/ring-renderer": index,
 
       // Serve index.html for other unmatched frontend routes (deep links).
@@ -444,6 +655,13 @@ export function createServer(options: CreateServerOptions = {}) {
           try {
             const payload = await parseJsonBody(req);
             const input = parsePersistLocationInput(payload);
+            const existing = await locationStore.list();
+            if (hasDuplicateWithoutNickname(input, existing)) {
+              throw new ValidationError(
+                "duplicate_requires_nickname",
+                "A nickname is required when saving another item for the same place.",
+              );
+            }
             const timezone = input.timezone ?? (await service.getTimeForLocation(input.coords)).timezone;
             const result = await locationStore.add({
               ...input,
@@ -472,6 +690,30 @@ export function createServer(options: CreateServerOptions = {}) {
       },
 
       "/api/locations/persisted/:id": {
+        async PATCH(req) {
+          try {
+            const id = req.params.id;
+            const payload = await parseJsonBody(req);
+            const patch = parsePersistLocationPatch(payload);
+            const updated = await locationStore.update(id, patch);
+            if (!updated) {
+              return Response.json(
+                {
+                  error: {
+                    code: "persisted_location_not_found",
+                    message: `No persisted location found for id: ${id}`,
+                  },
+                },
+                { status: 404 },
+              );
+            }
+
+            return Response.json({ result: toPersistedResponse(updated) });
+          } catch (error) {
+            return errorResponse(error);
+          }
+        },
+
         async DELETE(req) {
           try {
             const id = req.params.id;

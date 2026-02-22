@@ -65,6 +65,7 @@ interface NominatimAddress {
   state_district?: string;
   province?: string;
   country?: string;
+  country_code?: string;
 }
 
 interface NominatimRecord {
@@ -78,6 +79,7 @@ interface NominatimRecord {
   lat: string;
   lon: string;
   display_name?: string;
+  namedetails?: Record<string, string>;
   address?: NominatimAddress;
 }
 
@@ -89,6 +91,7 @@ interface IpApiResponse {
   city?: string;
   region?: string;
   country_name?: string;
+  country_code?: string;
   latitude?: number;
   longitude?: number;
 }
@@ -189,6 +192,29 @@ function formatLocationName(displayName: string | undefined, address: NominatimA
   return "Unknown location";
 }
 
+function namesEquivalent(left: string, right: string): boolean {
+  return normalizeCacheToken(left) === normalizeCacheToken(right);
+}
+
+function extractEnglishName(namedetails: Record<string, string> | undefined): string | undefined {
+  if (!namedetails) {
+    return undefined;
+  }
+
+  const english = firstDefined([
+    namedetails["name:en"],
+    namedetails["official_name:en"],
+    namedetails["short_name:en"],
+    namedetails.int_name,
+  ]);
+
+  if (!english) {
+    return undefined;
+  }
+
+  return english.trim();
+}
+
 function parseBoundingBox(values: string[] | undefined): BoundingBox | undefined {
   if (!values || values.length !== 4) {
     return undefined;
@@ -212,19 +238,22 @@ function inferGranularity(record: NominatimRecord): ReturnType<typeof parseLocat
 }
 
 function formatAdmin(record: NominatimRecord): LocationMatch["admin"] {
-  const locality = firstDefined([
+  const city = firstDefined([
     record.address?.city,
     record.address?.town,
     record.address?.village,
     record.address?.hamlet,
+    record.address?.municipality,
+  ]);
+
+  const suburb = firstDefined([
     record.address?.suburb,
     record.address?.city_district,
-    record.address?.municipality,
     record.address?.neighbourhood,
     record.address?.neighborhood,
   ]);
 
-  const region = firstDefined([
+  const state = firstDefined([
     record.address?.state,
     record.address?.region,
     record.address?.state_district,
@@ -232,11 +261,31 @@ function formatAdmin(record: NominatimRecord): LocationMatch["admin"] {
     record.address?.county,
   ]);
 
-  return {
-    country: firstDefined([record.address?.country]),
-    region,
-    locality,
-  };
+  const country = firstDefined([record.address?.country]);
+  const countryCode = firstDefined([record.address?.country_code])?.toUpperCase();
+  const locality = city ?? suburb;
+  const admin: LocationMatch["admin"] = {};
+  if (country) {
+    admin.country = country;
+  }
+  if (countryCode) {
+    admin.countryCode = countryCode;
+  }
+  if (state) {
+    admin.region = state;
+    admin.state = state;
+  }
+  if (locality) {
+    admin.locality = locality;
+  }
+  if (city) {
+    admin.city = city;
+  }
+  if (suburb) {
+    admin.suburb = suburb;
+  }
+
+  return admin;
 }
 
 function buildLocationId(record: NominatimRecord, source: string, lat: number, long: number): string {
@@ -261,10 +310,12 @@ function nominatimToLocation(record: NominatimRecord, source: string): LocationM
 
   const granularity = inferGranularity(record);
   const name = formatLocationName(record.display_name, record.address);
+  const englishName = extractEnglishName(record.namedetails);
 
   return {
     id: buildLocationId(record, source, lat, long),
     name,
+    englishName: englishName && !namesEquivalent(name, englishName) ? englishName : undefined,
     fullName: record.display_name?.trim() || name,
     coords: { lat, long },
     source,
@@ -358,6 +409,7 @@ function createNominatimProvider(options: RequestOptions & { userAgent: string; 
       const url = new URL("https://nominatim.openstreetmap.org/search");
       url.searchParams.set("format", "jsonv2");
       url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("namedetails", "1");
       url.searchParams.set("limit", String(safeLimit));
       url.searchParams.set("q", normalizedQuery);
       if (scopeBoundingBox) {
@@ -402,6 +454,7 @@ function createNominatimProvider(options: RequestOptions & { userAgent: string; 
       const url = new URL("https://nominatim.openstreetmap.org/reverse");
       url.searchParams.set("format", "jsonv2");
       url.searchParams.set("addressdetails", "1");
+      url.searchParams.set("namedetails", "1");
       url.searchParams.set("lat", String(coords.lat));
       url.searchParams.set("lon", String(coords.long));
 
@@ -484,6 +537,22 @@ function createIpApiLocationProvider(options: RequestOptions & { now: () => numb
         (value): value is string => Boolean(value && value.trim().length > 0),
       );
       const name = parts.length > 0 ? parts.join(", ") : "Unknown location";
+      const admin: LocationMatch["admin"] = {};
+      if (response.country_name) {
+        admin.country = response.country_name;
+      }
+      if (response.country_code) {
+        admin.countryCode = response.country_code.toUpperCase();
+      }
+      if (response.region) {
+        admin.region = response.region;
+        admin.state = response.region;
+      }
+      if (response.city) {
+        admin.locality = response.city;
+        admin.city = response.city;
+      }
+
       const result: LocationMatch = {
         id: "ipapi:current",
         name,
@@ -492,11 +561,7 @@ function createIpApiLocationProvider(options: RequestOptions & { now: () => numb
         source: "ipapi",
         granularity: "unknown",
         isLocalityClass: false,
-        admin: {
-          country: response.country_name,
-          region: response.region,
-          locality: response.city,
-        },
+        admin,
       };
 
       ipCache.set(cacheKey, result, IP_CACHE_TTL_MS);

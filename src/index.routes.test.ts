@@ -124,6 +124,15 @@ function createMemoryLocationStore(seed: PersistedLocation[] = []): PersistedLoc
         nickname: input.nickname?.trim() || undefined,
         timezone: input.timezone,
         granularity: input.granularity,
+        kind: input.kind ?? "location",
+        entityName: input.entityName,
+        countryCode: input.countryCode,
+        adminState: input.adminState,
+        adminCity: input.adminCity,
+        adminSuburb: input.adminSuburb,
+        avatarSource: input.avatarSource,
+        avatarImageUrl: input.avatarImageUrl,
+        gravatarHash: input.gravatarHash,
         createdAtMs: 1_700_000_000_000 + list.length,
       };
       list.push(entry);
@@ -151,8 +160,18 @@ function createMemoryLocationStore(seed: PersistedLocation[] = []): PersistedLoc
 
       const updated: PersistedLocation = {
         ...existing,
+        nickname: patch.nickname === undefined ? existing.nickname : patch.nickname.trim() || undefined,
         timezone: patch.timezone ?? existing.timezone,
         granularity: patch.granularity ?? existing.granularity,
+        kind: patch.kind ?? existing.kind,
+        entityName: patch.entityName ?? existing.entityName,
+        countryCode: patch.countryCode ?? existing.countryCode,
+        adminState: patch.adminState ?? existing.adminState,
+        adminCity: patch.adminCity ?? existing.adminCity,
+        adminSuburb: patch.adminSuburb ?? existing.adminSuburb,
+        avatarSource: patch.avatarSource ?? existing.avatarSource,
+        avatarImageUrl: patch.avatarImageUrl ?? existing.avatarImageUrl,
+        gravatarHash: patch.gravatarHash ?? existing.gravatarHash,
       };
       list[index] = updated;
       return updated;
@@ -179,11 +198,12 @@ async function withServer(
 }
 
 describe("route handlers", () => {
-  test("redirects root to /ring-renderer", async () => {
+  test("serves index for root path", async () => {
     await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
-      const response = await fetch(new URL("/", baseUrl), { redirect: "manual" });
-      expect(response.status).toBe(302);
-      expect(response.headers.get("location")).toContain("/ring-renderer");
+      const response = await fetch(new URL("/", baseUrl));
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain("<div id=\"root\"></div>");
     });
   });
 
@@ -526,6 +546,7 @@ describe("route handlers", () => {
           nickname: "Trip",
           timezone: "Europe/Paris",
           granularity: "city",
+          kind: "location",
           createdAtMs: 1_700_000_000_000,
         },
       });
@@ -563,6 +584,39 @@ describe("route handlers", () => {
           lat: 37.7749,
           long: -122.4194,
           timezone: "America/Los_Angeles",
+          kind: "location",
+          createdAtMs: 1_700_000_000_000,
+        },
+      });
+    });
+  });
+
+  test("persists entity records and stores gravatar hash only", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(new URL("/api/locations/persisted", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Tokyo, Tokyo, Japan",
+          lat: 35.6762,
+          long: 139.6503,
+          kind: "entity",
+          entityName: "Alice",
+          gravatarEmail: "User@example.com",
+        }),
+      });
+
+      expect(response.status).toBe(201);
+      expect(await response.json()).toEqual({
+        result: {
+          id: "saved-1",
+          name: "Tokyo, Tokyo, Japan",
+          lat: 35.6762,
+          long: 139.6503,
+          timezone: "America/Los_Angeles",
+          kind: "entity",
+          entityName: "Alice",
+          gravatarHash: "b58996c504c5638798eb6b511e6f49af",
           createdAtMs: 1_700_000_000_000,
         },
       });
@@ -602,6 +656,73 @@ describe("route handlers", () => {
           message: "Coordinates must include lat in [-90, 90] and long in [-180, 180].",
         },
       });
+
+      const duplicateWithoutNickname = await fetch(new URL("/api/locations/persisted", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Paris, Ile-de-France, France",
+          lat: 48.8566,
+          long: 2.3522,
+        }),
+      });
+      expect(duplicateWithoutNickname.status).toBe(201);
+
+      const duplicateSecondWithoutNickname = await fetch(new URL("/api/locations/persisted", baseUrl), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Paris, Ile-de-France, France",
+          lat: 48.85661,
+          long: 2.35219,
+        }),
+      });
+      expect(duplicateSecondWithoutNickname.status).toBe(400);
+      expect(await duplicateSecondWithoutNickname.json()).toEqual({
+        error: {
+          code: "duplicate_requires_nickname",
+          message: "A nickname is required when saving another item for the same place.",
+        },
+      });
+    });
+  });
+
+  test("patches persisted location nickname", async () => {
+    const store = createMemoryLocationStore([
+      {
+        id: "saved-a",
+        name: "Tokyo, Tokyo, Japan",
+        coords: { lat: 35.6762, long: 139.6503 },
+        nickname: "Work",
+        timezone: "Asia/Tokyo",
+        granularity: "city",
+        kind: "location",
+        createdAtMs: 1_700_000_000_010,
+      },
+    ]);
+
+    await withServer(createDependencies(), store, async baseUrl => {
+      const response = await fetch(new URL("/api/locations/persisted/saved-a", baseUrl), {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          nickname: "Team Tokyo",
+        }),
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
+        result: {
+          id: "saved-a",
+          name: "Tokyo, Tokyo, Japan",
+          lat: 35.6762,
+          long: 139.6503,
+          nickname: "Team Tokyo",
+          timezone: "Asia/Tokyo",
+          granularity: "city",
+          kind: "location",
+          createdAtMs: 1_700_000_000_010,
+        },
+      });
     });
   });
 
@@ -639,6 +760,7 @@ describe("route handlers", () => {
             nickname: "Work",
             timezone: "Asia/Tokyo",
             granularity: "city",
+            kind: "location",
             createdAtMs: 1_700_000_000_010,
           },
           {
@@ -648,6 +770,7 @@ describe("route handlers", () => {
             long: -0.1276,
             timezone: "Europe/London",
             granularity: "city",
+            kind: "location",
             createdAtMs: 1_700_000_000_000,
           },
         ],
@@ -664,6 +787,7 @@ describe("route handlers", () => {
           nickname: "Work",
           timezone: "Asia/Tokyo",
           granularity: "city",
+          kind: "location",
           createdAtMs: 1_700_000_000_010,
         },
       });
@@ -736,6 +860,7 @@ describe("route handlers", () => {
             lat: 40.7128,
             long: -74.006,
             timezone: "America/New_York",
+            kind: "location",
             createdAtMs: 1_700_000_000_000,
           },
         ],

@@ -3,6 +3,12 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parseLocationGranularity, type Coordinates, type LocationGranularity } from "./types";
 
+export const PERSISTED_LOCATION_KINDS = ["location", "entity"] as const;
+export type PersistedLocationKind = (typeof PERSISTED_LOCATION_KINDS)[number];
+
+export const PERSISTED_AVATAR_SOURCES = ["none", "upload", "gravatar"] as const;
+export type PersistedAvatarSource = (typeof PERSISTED_AVATAR_SOURCES)[number];
+
 export interface PersistedLocation {
   id: string;
   name: string;
@@ -10,6 +16,15 @@ export interface PersistedLocation {
   nickname?: string;
   timezone?: string;
   granularity?: LocationGranularity;
+  kind?: PersistedLocationKind;
+  entityName?: string;
+  countryCode?: string;
+  adminState?: string;
+  adminCity?: string;
+  adminSuburb?: string;
+  avatarSource?: PersistedAvatarSource;
+  avatarImageUrl?: string;
+  gravatarHash?: string;
   createdAtMs: number;
 }
 
@@ -19,11 +34,30 @@ export interface PersistLocationInput {
   nickname?: string;
   timezone?: string;
   granularity?: LocationGranularity;
+  kind?: PersistedLocationKind;
+  entityName?: string;
+  countryCode?: string;
+  adminState?: string;
+  adminCity?: string;
+  adminSuburb?: string;
+  avatarSource?: PersistedAvatarSource;
+  avatarImageUrl?: string;
+  gravatarHash?: string;
 }
 
 export interface PersistLocationPatch {
+  nickname?: string;
   timezone?: string;
   granularity?: LocationGranularity;
+  kind?: PersistedLocationKind;
+  entityName?: string;
+  countryCode?: string;
+  adminState?: string;
+  adminCity?: string;
+  adminSuburb?: string;
+  avatarSource?: PersistedAvatarSource;
+  avatarImageUrl?: string;
+  gravatarHash?: string;
 }
 
 export interface PersistedLocationStoreLike {
@@ -62,6 +96,15 @@ function normalizeNickname(nickname?: string): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function normalizeOptionalText(value?: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function normalizeName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -90,6 +133,32 @@ function normalizeGranularity(granularity?: string): LocationGranularity | undef
   }
 
   return parseLocationGranularity(granularity);
+}
+
+function normalizeKind(kind?: string): PersistedLocationKind {
+  if (kind === undefined) {
+    return "location";
+  }
+
+  const normalized = kind.trim().toLowerCase();
+  if (normalized === "entity" || normalized === "location") {
+    return normalized;
+  }
+
+  throw new Error("kind must be one of: location, entity.");
+}
+
+function normalizeAvatarSource(value?: string): PersistedAvatarSource | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "none" || normalized === "upload" || normalized === "gravatar") {
+    return normalized;
+  }
+
+  throw new Error("avatarSource must be one of: none, upload, gravatar.");
 }
 
 function isCoordinates(value: unknown): value is Coordinates {
@@ -129,6 +198,15 @@ function toPersistedLocation(value: LegacyPersistedLocation | PersistedLocation)
     nickname: normalizeNickname(value.nickname),
     timezone: normalizeTimezone(persistedLike.timezone),
     granularity: normalizeGranularity(persistedLike.granularity),
+    kind: normalizeKind(persistedLike.kind),
+    entityName: normalizeOptionalText(persistedLike.entityName),
+    countryCode: normalizeOptionalText(persistedLike.countryCode)?.toUpperCase(),
+    adminState: normalizeOptionalText(persistedLike.adminState),
+    adminCity: normalizeOptionalText(persistedLike.adminCity),
+    adminSuburb: normalizeOptionalText(persistedLike.adminSuburb),
+    avatarSource: normalizeAvatarSource(persistedLike.avatarSource),
+    avatarImageUrl: normalizeOptionalText(persistedLike.avatarImageUrl),
+    gravatarHash: normalizeOptionalText(persistedLike.gravatarHash)?.toLowerCase(),
     createdAtMs: value.createdAtMs,
   };
 }
@@ -162,6 +240,15 @@ interface PersistedLocationRow {
   nickname: string | null;
   timezone: string | null;
   granularity: string | null;
+  kind: string | null;
+  entity_name: string | null;
+  country_code: string | null;
+  admin_state: string | null;
+  admin_city: string | null;
+  admin_suburb: string | null;
+  avatar_source: string | null;
+  avatar_image_url: string | null;
+  gravatar_hash: string | null;
   created_at_ms: number;
 }
 
@@ -176,6 +263,15 @@ function rowToPersistedLocation(row: PersistedLocationRow): PersistedLocation {
     nickname: normalizeNickname(row.nickname ?? undefined),
     timezone: normalizeTimezone(row.timezone ?? undefined),
     granularity: normalizeGranularity(row.granularity ?? undefined),
+    kind: normalizeKind(row.kind ?? undefined),
+    entityName: normalizeOptionalText(row.entity_name ?? undefined),
+    countryCode: normalizeOptionalText(row.country_code ?? undefined)?.toUpperCase(),
+    adminState: normalizeOptionalText(row.admin_state ?? undefined),
+    adminCity: normalizeOptionalText(row.admin_city ?? undefined),
+    adminSuburb: normalizeOptionalText(row.admin_suburb ?? undefined),
+    avatarSource: normalizeAvatarSource(row.avatar_source ?? undefined),
+    avatarImageUrl: normalizeOptionalText(row.avatar_image_url ?? undefined),
+    gravatarHash: normalizeOptionalText(row.gravatar_hash ?? undefined)?.toLowerCase(),
     createdAtMs: row.created_at_ms,
   };
 }
@@ -208,15 +304,49 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
         nickname TEXT,
         timezone TEXT,
         granularity TEXT,
+        kind TEXT,
+        entity_name TEXT,
+        country_code TEXT,
+        admin_state TEXT,
+        admin_city TEXT,
+        admin_suburb TEXT,
+        avatar_source TEXT,
+        avatar_image_url TEXT,
+        gravatar_hash TEXT,
         created_at_ms INTEGER NOT NULL
       );
     `);
+    this.ensureSchemaColumns();
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_persisted_locations_created_at
       ON persisted_locations(created_at_ms DESC);
     `);
 
     this.migrateFromLegacyJson();
+  }
+
+  private ensureSchemaColumns(): void {
+    const columnRows = this.db.query("PRAGMA table_info(persisted_locations)").all() as Array<{ name: string }>;
+    const names = new Set(columnRows.map(row => row.name));
+    const requiredColumns: Array<{ name: string; sqlType: string }> = [
+      { name: "kind", sqlType: "TEXT" },
+      { name: "entity_name", sqlType: "TEXT" },
+      { name: "country_code", sqlType: "TEXT" },
+      { name: "admin_state", sqlType: "TEXT" },
+      { name: "admin_city", sqlType: "TEXT" },
+      { name: "admin_suburb", sqlType: "TEXT" },
+      { name: "avatar_source", sqlType: "TEXT" },
+      { name: "avatar_image_url", sqlType: "TEXT" },
+      { name: "gravatar_hash", sqlType: "TEXT" },
+    ];
+
+    for (const column of requiredColumns) {
+      if (names.has(column.name)) {
+        continue;
+      }
+
+      this.db.exec(`ALTER TABLE persisted_locations ADD COLUMN ${column.name} ${column.sqlType};`);
+    }
   }
 
   private migrateFromLegacyJson(): void {
@@ -240,8 +370,17 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
         nickname,
         timezone,
         granularity,
+        kind,
+        entity_name,
+        country_code,
+        admin_state,
+        admin_city,
+        admin_suburb,
+        avatar_source,
+        avatar_image_url,
+        gravatar_hash,
         created_at_ms
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const transaction = this.db.transaction((locations: PersistedLocation[]) => {
@@ -254,6 +393,15 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
           location.nickname ?? null,
           location.timezone ?? null,
           location.granularity ?? null,
+          location.kind ?? "location",
+          location.entityName ?? null,
+          location.countryCode ?? null,
+          location.adminState ?? null,
+          location.adminCity ?? null,
+          location.adminSuburb ?? null,
+          location.avatarSource ?? null,
+          location.avatarImageUrl ?? null,
+          location.gravatarHash ?? null,
           location.createdAtMs,
         );
       }
@@ -274,6 +422,15 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
             nickname,
             timezone,
             granularity,
+            kind,
+            entity_name,
+            country_code,
+            admin_state,
+            admin_city,
+            admin_suburb,
+            avatar_source,
+            avatar_image_url,
+            gravatar_hash,
             created_at_ms
           FROM persisted_locations
           ORDER BY created_at_ms DESC
@@ -289,6 +446,15 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
     const nickname = normalizeNickname(input.nickname);
     const timezone = normalizeTimezone(input.timezone);
     const granularity = normalizeGranularity(input.granularity);
+    const kind = normalizeKind(input.kind);
+    const entityName = normalizeOptionalText(input.entityName);
+    const countryCode = normalizeOptionalText(input.countryCode)?.toUpperCase();
+    const adminState = normalizeOptionalText(input.adminState);
+    const adminCity = normalizeOptionalText(input.adminCity);
+    const adminSuburb = normalizeOptionalText(input.adminSuburb);
+    const avatarSource = normalizeAvatarSource(input.avatarSource);
+    const avatarImageUrl = normalizeOptionalText(input.avatarImageUrl);
+    const gravatarHash = normalizeOptionalText(input.gravatarHash)?.toLowerCase();
 
     if (!Number.isFinite(input.coords.lat) || !Number.isFinite(input.coords.long)) {
       throw new Error("Coordinates must be finite numbers.");
@@ -304,6 +470,15 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
       nickname,
       timezone,
       granularity,
+      kind,
+      entityName,
+      countryCode,
+      adminState,
+      adminCity,
+      adminSuburb,
+      avatarSource,
+      avatarImageUrl,
+      gravatarHash,
       createdAtMs: this.now(),
     };
 
@@ -318,8 +493,17 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
             nickname,
             timezone,
             granularity,
+            kind,
+            entity_name,
+            country_code,
+            admin_state,
+            admin_city,
+            admin_suburb,
+            avatar_source,
+            avatar_image_url,
+            gravatar_hash,
             created_at_ms
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
       )
       .run(
@@ -330,6 +514,15 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
         entry.nickname ?? null,
         entry.timezone ?? null,
         entry.granularity ?? null,
+        entry.kind ?? "location",
+        entry.entityName ?? null,
+        entry.countryCode ?? null,
+        entry.adminState ?? null,
+        entry.adminCity ?? null,
+        entry.adminSuburb ?? null,
+        entry.avatarSource ?? null,
+        entry.avatarImageUrl ?? null,
+        entry.gravatarHash ?? null,
         entry.createdAtMs,
       );
 
@@ -353,6 +546,15 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
             nickname,
             timezone,
             granularity,
+            kind,
+            entity_name,
+            country_code,
+            admin_state,
+            admin_city,
+            admin_suburb,
+            avatar_source,
+            avatar_image_url,
+            gravatar_hash,
             created_at_ms
           FROM persisted_locations
           WHERE id = ?
@@ -385,6 +587,15 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
             nickname,
             timezone,
             granularity,
+            kind,
+            entity_name,
+            country_code,
+            admin_state,
+            admin_city,
+            admin_suburb,
+            avatar_source,
+            avatar_image_url,
+            gravatar_hash,
             created_at_ms
           FROM persisted_locations
           WHERE id = ?
@@ -397,18 +608,62 @@ export class PersistedLocationStore implements PersistedLocationStoreLike {
     }
 
     const existing = rowToPersistedLocation(row);
-    const timezone = patch.timezone === undefined ? existing.timezone : normalizeTimezone(patch.timezone);
-    const granularity =
-      patch.granularity === undefined ? existing.granularity : normalizeGranularity(patch.granularity);
+    const next: PersistedLocation = {
+      ...existing,
+      nickname: patch.nickname === undefined ? existing.nickname : normalizeNickname(patch.nickname),
+      timezone: patch.timezone === undefined ? existing.timezone : normalizeTimezone(patch.timezone),
+      granularity: patch.granularity === undefined ? existing.granularity : normalizeGranularity(patch.granularity),
+      kind: patch.kind === undefined ? existing.kind : normalizeKind(patch.kind),
+      entityName: patch.entityName === undefined ? existing.entityName : normalizeOptionalText(patch.entityName),
+      countryCode:
+        patch.countryCode === undefined
+          ? existing.countryCode
+          : normalizeOptionalText(patch.countryCode)?.toUpperCase(),
+      adminState: patch.adminState === undefined ? existing.adminState : normalizeOptionalText(patch.adminState),
+      adminCity: patch.adminCity === undefined ? existing.adminCity : normalizeOptionalText(patch.adminCity),
+      adminSuburb: patch.adminSuburb === undefined ? existing.adminSuburb : normalizeOptionalText(patch.adminSuburb),
+      avatarSource:
+        patch.avatarSource === undefined ? existing.avatarSource : normalizeAvatarSource(patch.avatarSource),
+      avatarImageUrl:
+        patch.avatarImageUrl === undefined ? existing.avatarImageUrl : normalizeOptionalText(patch.avatarImageUrl),
+      gravatarHash:
+        patch.gravatarHash === undefined
+          ? existing.gravatarHash
+          : normalizeOptionalText(patch.gravatarHash)?.toLowerCase(),
+    };
 
-    this.db
-      .prepare("UPDATE persisted_locations SET timezone = ?, granularity = ? WHERE id = ?")
-      .run(timezone ?? null, granularity ?? null, targetId);
+    const updateSetters: string[] = [];
+    const updateValues: Array<string | null> = [];
+    const maybeSet = (column: string, patchValue: unknown, value: string | null) => {
+      if (patchValue === undefined) {
+        return;
+      }
+
+      updateSetters.push(`${column} = ?`);
+      updateValues.push(value);
+    };
+
+    maybeSet("nickname", patch.nickname, next.nickname ?? null);
+    maybeSet("timezone", patch.timezone, next.timezone ?? null);
+    maybeSet("granularity", patch.granularity, next.granularity ?? null);
+    maybeSet("kind", patch.kind, next.kind ?? null);
+    maybeSet("entity_name", patch.entityName, next.entityName ?? null);
+    maybeSet("country_code", patch.countryCode, next.countryCode ?? null);
+    maybeSet("admin_state", patch.adminState, next.adminState ?? null);
+    maybeSet("admin_city", patch.adminCity, next.adminCity ?? null);
+    maybeSet("admin_suburb", patch.adminSuburb, next.adminSuburb ?? null);
+    maybeSet("avatar_source", patch.avatarSource, next.avatarSource ?? null);
+    maybeSet("avatar_image_url", patch.avatarImageUrl, next.avatarImageUrl ?? null);
+    maybeSet("gravatar_hash", patch.gravatarHash, next.gravatarHash ?? null);
+
+    if (updateSetters.length > 0) {
+      this.db
+        .prepare(`UPDATE persisted_locations SET ${updateSetters.join(", ")} WHERE id = ?`)
+        .run(...updateValues, targetId);
+    }
 
     return {
-      ...existing,
-      timezone,
-      granularity,
+      ...next,
     };
   }
 }

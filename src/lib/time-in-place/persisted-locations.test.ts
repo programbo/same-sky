@@ -69,9 +69,31 @@ describe("PersistedLocationStore", () => {
       coords: { lat: 10, long: 11 },
     });
 
-    const updated = await store.update(saved.id, { timezone: "Asia/Tokyo", granularity: "city" });
+    const updated = await store.update(saved.id, { timezone: "Asia/Tokyo", granularity: "city", nickname: "Renamed" });
     expect(updated?.timezone).toBe("Asia/Tokyo");
     expect(updated?.granularity).toBe("city");
+    expect(updated?.nickname).toBe("Renamed");
+  });
+
+  test("stores extended entity metadata fields", async () => {
+    const store = new PersistedLocationStore(path.join(TEST_DIR, "locations.db"));
+    const saved = await store.add({
+      name: "Singapore, Singapore",
+      coords: { lat: 1.2899, long: 103.8519 },
+      kind: "entity",
+      entityName: "APAC Team",
+      countryCode: "SG",
+      adminState: "Singapore",
+      adminCity: "Singapore",
+      adminSuburb: "Downtown Core",
+      avatarSource: "gravatar",
+      gravatarHash: "b58996c504c5638798eb6b511e6f49af",
+    });
+
+    expect(saved.kind).toBe("entity");
+    expect(saved.entityName).toBe("APAC Team");
+    expect(saved.countryCode).toBe("SG");
+    expect(saved.gravatarHash).toBe("b58996c504c5638798eb6b511e6f49af");
   });
 
   test("migrates v1 legacy JSON into sqlite on first run", async () => {

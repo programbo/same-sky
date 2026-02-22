@@ -85,6 +85,13 @@ How to maintain this file:
 
 ## Refinement Log
 
+### 2026-02-22
+
+- Issue: "Browse locality options in this area" reused the selected region name as a locality query and often returned zero results for broad regions.
+  - Root cause: browse mode and manual scoped search shared identical lookup behavior (`q=<region name>`), then locality filtering removed non-locality matches.
+  - Fix: introduced explicit browse-mode fallback queries scoped to the selected bounding box and kept manual scoped search unchanged.
+  - Reusable rule: model "browse" and "search" as distinct intents; browse needs discovery-oriented fallback behavior when seed terms are region-level.
+
 ### 2026-02-20
 
 - Issue: prompt headers appeared after interactive menus.

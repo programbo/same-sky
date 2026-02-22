@@ -6,13 +6,16 @@ import type {
   PersistedLocationStoreLike,
   TimeInPlaceService,
 } from "../lib/time-in-place";
-import { isLocationSelectableForSky } from "../lib/time-in-place";
+import { isLocationSelectableForSky, normalizeCacheToken } from "../lib/time-in-place";
+import { formatLocationLabel } from "./location-label";
 import type { LocationActionChoice, RefinementActionChoice, TuiUi } from "./ui-contract";
 
 const REQUIRE_LOCALITY_FOR_PERSIST = (process.env.REQUIRE_LOCALITY_FOR_PERSIST ?? "true").toLowerCase() !== "false";
 const FORCE_REFINEMENT_DIAGONAL_KM = 300;
 const WARN_REFINEMENT_DIAGONAL_KM = 50;
 const SMALL_AREA_AUTO_ALLOW_KM = 150;
+const LOOKUP_RESULT_LIMIT = 5;
+const LOCALITY_BROWSE_FALLBACK_QUERIES = ["city", "town", "village", "suburb", "a", "e", "i", "o", "u"] as const;
 
 interface RemovalOutcome {
   removedCount: number;
@@ -31,6 +34,7 @@ interface LocationMachineContext {
   lookupScopeLabel: string | null;
   lookupScopeSeedQuery: string;
   lookupLocalityOnly: boolean;
+  lookupBrowseMode: boolean;
   nickname: string;
   persistedLocations: PersistedLocation[];
   selectedRemovalIds: string[];
@@ -72,7 +76,8 @@ function granularityToLabel(granularity: string): string {
 
 function formatLocation(match: LocationMatch): string {
   const timezone = match.timezonePreview ?? "timezone unavailable";
-  return `${match.name} [${match.granularity}] (${match.coords.lat.toFixed(4)}, ${match.coords.long.toFixed(4)}) TZ: ${timezone}`;
+  const label = formatLocationLabel(match);
+  return `${label} [${match.granularity}] (${match.coords.lat.toFixed(4)}, ${match.coords.long.toFixed(4)}) TZ: ${timezone}`;
 }
 
 function formatPersisted(location: PersistedLocation): string {
@@ -82,11 +87,48 @@ function formatPersisted(location: PersistedLocation): string {
 }
 
 function formatScopeLabel(match: LocationMatch): string {
-  const parts = [match.admin.country, match.admin.region, match.name].filter(
+  const rawParts = [match.admin.country, match.admin.region, formatLocationLabel(match)].filter(
     (value): value is string => Boolean(value && value.trim().length > 0),
   );
+  const dedupedParts: string[] = [];
+  const indexByKey = new Map<string, number>();
 
-  return parts.length > 0 ? parts.join(" > ") : match.name;
+  for (const rawPart of rawParts) {
+    const part = rawPart.trim();
+    if (!part) {
+      continue;
+    }
+
+    const dedupeKey = normalizeCacheToken(part.replace(/\s*\([^)]*\)\s*$/, ""));
+    if (!dedupeKey) {
+      continue;
+    }
+
+    const existingIndex = indexByKey.get(dedupeKey);
+    if (existingIndex === undefined) {
+      indexByKey.set(dedupeKey, dedupedParts.length);
+      dedupedParts.push(part);
+      continue;
+    }
+
+    const existing = dedupedParts[existingIndex];
+    if (!existing) {
+      dedupedParts[existingIndex] = part;
+      continue;
+    }
+
+    const existingHasParenthetical = /\([^)]*\)\s*$/.test(existing);
+    const nextHasParenthetical = /\([^)]*\)\s*$/.test(part);
+    if (nextHasParenthetical && !existingHasParenthetical) {
+      dedupedParts[existingIndex] = part;
+    }
+  }
+
+  return dedupedParts.length > 0 ? dedupedParts.join(" > ") : formatLocationLabel(match);
+}
+
+function getLocationUniqKey(match: LocationMatch): string {
+  return `${match.id}:${match.coords.lat.toFixed(5)}:${match.coords.long.toFixed(5)}`;
 }
 
 function emitMetric(
@@ -168,6 +210,7 @@ export const locationManagementMachine = setup({
       lookupScopeLabel: () => null,
       lookupScopeSeedQuery: () => "",
       lookupLocalityOnly: () => false,
+      lookupBrowseMode: () => false,
       lookupResults: () => [],
       selectedResult: () => null,
       nickname: () => "",
@@ -175,6 +218,7 @@ export const locationManagementMachine = setup({
     }),
     storeLookupQuery: assign({
       query: (_, params: { query: string }) => params.query.trim(),
+      lookupBrowseMode: () => false,
       selectedResult: () => null,
       nickname: () => "",
       selectionAnalysis: () => null,
@@ -194,7 +238,16 @@ export const locationManagementMachine = setup({
     printNoLookupResults: ({ context }) => {
       if (context.lookupLocalityOnly) {
         const scope = context.lookupScopeLabel ? ` within ${context.lookupScopeLabel}` : "";
-        context.ui.printWarning(`No locality-level locations found${scope} for "${context.query}". Try nearby city/suburb names.`);
+        if (context.lookupBrowseMode) {
+          context.ui.printWarning(
+            `No locality-level locations found${scope}. Try "Search within this area" with a nearby city/suburb name.`,
+          );
+          return;
+        }
+
+        context.ui.printWarning(
+          `No locality-level locations found${scope} for "${context.query}". Try nearby city/suburb names.`,
+        );
         return;
       }
 
@@ -227,6 +280,7 @@ export const locationManagementMachine = setup({
       },
       lookupScopeSeedQuery: ({ context }) => context.selectedResult?.name ?? context.lookupScopeSeedQuery,
       lookupLocalityOnly: () => true,
+      lookupBrowseMode: () => false,
       lookupResults: () => [],
       selectedResult: () => null,
       nickname: () => "",
@@ -235,6 +289,7 @@ export const locationManagementMachine = setup({
     }),
     setLookupQueryFromScopeSeed: assign({
       query: ({ context }) => context.lookupScopeSeedQuery,
+      lookupBrowseMode: () => true,
       selectedResult: () => null,
       selectionAnalysis: () => null,
     }),
@@ -373,13 +428,42 @@ export const locationManagementMachine = setup({
           query: string;
           scopeBoundingBox: BoundingBox | null;
           localityOnly: boolean;
+          browseMode: boolean;
         };
       }) => {
-        return input.service.lookupLocations(input.query, {
-          limit: 5,
+        const lookupOptions = {
+          limit: LOOKUP_RESULT_LIMIT,
           scopeBoundingBox: input.scopeBoundingBox ?? undefined,
           localityOnly: input.localityOnly,
-        });
+        };
+        const primaryResults = await input.service.lookupLocations(input.query, lookupOptions);
+
+        if (!input.browseMode || !input.localityOnly || !input.scopeBoundingBox || primaryResults.length > 0) {
+          return primaryResults;
+        }
+
+        const dedupedResults = new Map<string, LocationMatch>();
+        for (const match of primaryResults) {
+          dedupedResults.set(getLocationUniqKey(match), match);
+        }
+
+        const normalizedPrimary = input.query.trim().toLowerCase();
+        for (const fallbackQuery of LOCALITY_BROWSE_FALLBACK_QUERIES) {
+          if (fallbackQuery === normalizedPrimary) {
+            continue;
+          }
+
+          const fallbackResults = await input.service.lookupLocations(fallbackQuery, lookupOptions);
+          for (const match of fallbackResults) {
+            dedupedResults.set(getLocationUniqKey(match), match);
+          }
+
+          if (dedupedResults.size >= LOOKUP_RESULT_LIMIT) {
+            break;
+          }
+        }
+
+        return Array.from(dedupedResults.values()).slice(0, LOOKUP_RESULT_LIMIT);
       },
     ),
     promptLookupResult: fromPromise(async ({ input }: { input: { ui: TuiUi; results: LocationMatch[] } }) => {
@@ -566,6 +650,7 @@ export const locationManagementMachine = setup({
     lookupScopeLabel: null,
     lookupScopeSeedQuery: "",
     lookupLocalityOnly: false,
+    lookupBrowseMode: false,
     nickname: "",
     persistedLocations: [],
     selectedRemovalIds: [],
@@ -717,6 +802,7 @@ export const locationManagementMachine = setup({
           query: context.query,
           scopeBoundingBox: context.lookupScopeBoundingBox,
           localityOnly: context.lookupLocalityOnly,
+          browseMode: context.lookupBrowseMode,
         }),
         onDone: [
           {

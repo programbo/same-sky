@@ -23,10 +23,17 @@
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
   font-family: var(--font-body);
   color: var(--text-main);
   background:
@@ -46,10 +53,6 @@ body::before {
     linear-gradient(90deg, transparent 96%, #ffffff0f 96%);
   background-size: 26px 26px;
   mix-blend-mode: soft-light;
-}
-
-#root {
-  width: 100%;
 }
 
 .app-shell {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createActor, waitFor } from "xstate";
 import type {
+  BoundingBox,
   LocationMatch,
   PersistLocationInput,
   PersistLocationPatch,
@@ -90,6 +91,7 @@ class MemoryStore implements PersistedLocationStoreLike {
 interface UiQueues {
   locationActions?: LocationActionChoice[];
   refinementActions?: RefinementActionChoice[];
+  refinementScopeLabels?: string[];
   lookupQueries?: string[];
   lookupResultIndexes?: Array<number | null>;
   nicknames?: Array<string | null>;
@@ -99,6 +101,7 @@ interface UiQueues {
 function createStubUi(queues: UiQueues): TuiUi {
   const locationActions = [...(queues.locationActions ?? [])];
   const refinementActions = [...(queues.refinementActions ?? [])];
+  const refinementScopeLabels = queues.refinementScopeLabels;
   const lookupQueries = [...(queues.lookupQueries ?? [])];
   const lookupResultIndexes = [...(queues.lookupResultIndexes ?? [])];
   const nicknames = [...(queues.nicknames ?? [])];
@@ -117,7 +120,8 @@ function createStubUi(queues: UiQueues): TuiUi {
     async chooseLocationAction(): Promise<LocationActionChoice> {
       return locationActions.shift() ?? "back";
     },
-    async chooseRefinementAction(_scopeLabel: string): Promise<RefinementActionChoice> {
+    async chooseRefinementAction(scopeLabel: string): Promise<RefinementActionChoice> {
+      refinementScopeLabels?.push(scopeLabel);
       return refinementActions.shift() ?? "restart";
     },
     async askLookupQuery(_message?: string): Promise<string> {
@@ -292,6 +296,189 @@ describe("locationManagementMachine", () => {
       { query: "Australia", localityOnly: false },
       { query: "Wodonga", localityOnly: true },
     ]);
+
+    actor.stop();
+  });
+
+  test("browse locality refinement falls back to hint queries when seed query returns no localities", async () => {
+    const greenlandBounds: BoundingBox = {
+      south: 59.7774,
+      north: 83.6274,
+      west: -73.04203,
+      east: -10.0288759,
+    };
+    const calls: Array<{ query: string; localityOnly?: boolean; scopeBoundingBox?: BoundingBox }> = [];
+
+    const service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation"> = {
+      async lookupLocations(query, options) {
+        calls.push({
+          query,
+          localityOnly: options?.localityOnly,
+          scopeBoundingBox: options?.scopeBoundingBox,
+        });
+
+        const normalizedQuery = query.trim().toLowerCase();
+        if (!options?.localityOnly && normalizedQuery === "greenland") {
+          return [
+            makeMatch({
+              id: "gl",
+              name: "Kalaallit Nunaat",
+              fullName: "Kalaallit Nunaat",
+              granularity: "country",
+              isLocalityClass: false,
+              admin: {
+                country: "Kalaallit Nunaat",
+                region: "Kalaallit Nunaat",
+              },
+              boundingBox: greenlandBounds,
+              timezonePreview: "America/Nuuk",
+            }),
+          ];
+        }
+
+        if (options?.localityOnly && normalizedQuery === "city") {
+          return [
+            makeMatch({
+              id: "nuuk",
+              name: "Nuuk, Sermersooq, Kalaallit Nunaat",
+              fullName: "Nuuk, Sermersooq, Kalaallit Nunaat",
+              coords: { lat: 64.1814, long: -51.6941 },
+              granularity: "city",
+              isLocalityClass: true,
+              admin: {
+                country: "Kalaallit Nunaat",
+                region: "Sermersooq",
+                locality: "Nuuk",
+              },
+              timezonePreview: "America/Nuuk",
+            }),
+          ];
+        }
+
+        return [];
+      },
+      async getTimeForLocation(coords) {
+        if (coords.lat >= 74) {
+          return {
+            timestampMs: 1_700_000_000_000,
+            timezone: "America/Nuuk",
+            offsetSeconds: -10_800,
+          };
+        }
+
+        return {
+          timestampMs: 1_700_000_000_000,
+          timezone: "America/Danmarkshavn",
+          offsetSeconds: 0,
+        };
+      },
+    };
+
+    const store = new MemoryStore();
+    const ui = createStubUi({
+      locationActions: ["lookup", "back"],
+      refinementActions: ["browse"],
+      lookupQueries: ["Greenland"],
+      nicknames: [""],
+    });
+
+    const actor = createActor(locationManagementMachine, {
+      input: { service, store, ui },
+    });
+
+    actor.start();
+    await waitFor(actor, snapshot => snapshot.status === "done");
+
+    const saved = await store.list();
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.name).toBe("Nuuk, Sermersooq, Kalaallit Nunaat");
+    expect(saved[0]?.granularity).toBe("city");
+    expect(saved[0]?.timezone).toBe("America/Nuuk");
+
+    expect(calls[0]).toMatchObject({
+      query: "Greenland",
+      localityOnly: false,
+    });
+
+    expect(
+      calls.some(
+        call =>
+          call.localityOnly === true &&
+          call.query === "city" &&
+          call.scopeBoundingBox?.south === greenlandBounds.south &&
+          call.scopeBoundingBox?.north === greenlandBounds.north &&
+          call.scopeBoundingBox?.west === greenlandBounds.west &&
+          call.scopeBoundingBox?.east === greenlandBounds.east,
+      ),
+    ).toBe(true);
+
+    actor.stop();
+  });
+
+  test("deduplicates repeated scope labels while preserving english context", async () => {
+    const service: Pick<TimeInPlaceService, "lookupLocations" | "getTimeForLocation"> = {
+      async lookupLocations(query) {
+        if (query.trim().toLowerCase() === "greenland") {
+          return [
+            makeMatch({
+              id: "gl",
+              name: "Kalaallit Nunaat",
+              englishName: "Greenland",
+              fullName: "Kalaallit Nunaat",
+              granularity: "country",
+              isLocalityClass: false,
+              admin: {
+                country: "Kalaallit Nunaat",
+                region: "Kalaallit Nunaat",
+                countryCode: "GL",
+              },
+              boundingBox: {
+                south: 59.7774,
+                north: 83.6274,
+                west: -73.04203,
+                east: -10.0288759,
+              },
+              timezonePreview: "America/Nuuk",
+            }),
+          ];
+        }
+
+        return [];
+      },
+      async getTimeForLocation(coords) {
+        if (coords.long <= -40) {
+          return {
+            timestampMs: 1_700_000_000_000,
+            timezone: "America/Nuuk",
+            offsetSeconds: -10_800,
+          };
+        }
+
+        return {
+          timestampMs: 1_700_000_000_000,
+          timezone: "America/Danmarkshavn",
+          offsetSeconds: 0,
+        };
+      },
+    };
+
+    const scopeLabels: string[] = [];
+    const store = new MemoryStore();
+    const ui = createStubUi({
+      locationActions: ["lookup", "back"],
+      refinementActions: ["restart"],
+      refinementScopeLabels: scopeLabels,
+      lookupQueries: ["Greenland"],
+    });
+
+    const actor = createActor(locationManagementMachine, {
+      input: { service, store, ui },
+    });
+
+    actor.start();
+    await waitFor(actor, snapshot => snapshot.status === "done");
+
+    expect(scopeLabels[0]).toBe("Kalaallit Nunaat (Greenland)");
 
     actor.stop();
   });

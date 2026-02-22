@@ -2,6 +2,7 @@ import { checkbox, input, select } from "@inquirer/prompts";
 import { emitKeypressEvents } from "node:readline";
 import { stdin } from "node:process";
 import type { LocationMatch, PersistedLocation } from "../lib/time-in-place";
+import { formatLocationLabel } from "./location-label";
 import type { AppFeatureChoice, LocationActionChoice, RefinementActionChoice, TuiUi } from "./ui-contract";
 
 const COLOR = {
@@ -72,8 +73,9 @@ async function promptOrFallback<T>(run: () => Promise<T>, fallback: T): Promise<
 function formatLocationChoice(match: LocationMatch, index: number): { name: string; value: number; description: string } {
   const timezone = match.timezonePreview ?? "Timezone unavailable";
   const localityStatus = match.isLocalityClass ? "ready" : "needs narrowing";
+  const label = formatLocationLabel(match);
   return {
-    name: `${index + 1}. ${match.name} [${match.granularity}]`,
+    name: `${index + 1}. ${label} [${match.granularity}]`,
     value: index,
     description: `${match.coords.lat.toFixed(4)}, ${match.coords.long.toFixed(4)} | TZ: ${timezone} | ${localityStatus}`,
   };
