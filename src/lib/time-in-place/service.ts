@@ -12,11 +12,53 @@ import type {
   Sky24hResult,
   SkyColorStop,
   SkyComputationOptions,
+  SkyEnvironment,
+  SkyFactorName,
+  SkySecondOrderFactors,
 } from "./types";
 
 const DEFAULT_LOOKUP_LIMIT = 5;
 const MAX_LOOKUP_LIMIT = 10;
 const DEFAULT_TIMEZONE_PREVIEW_LIMIT = 5;
+const DEFAULT_SKY_FACTOR_CONFIDENCE = 0.4;
+const BASELINE_SKY_FACTORS: SkySecondOrderFactors = {
+  altitude: 0,
+  turbidity: 0.5,
+  humidity: 0.5,
+  cloud_fraction: 0.3,
+  ozone_factor: 0.5,
+  light_pollution: 0.5,
+};
+
+function createFallbackSkyEnvironment(timezone: string, atMs: number): SkyEnvironment {
+  const factorEntries = Object.entries(BASELINE_SKY_FACTORS) as Array<[SkyFactorName, number]>;
+  const factors = Object.fromEntries(
+    factorEntries.map(([name, value]) => [
+      name,
+      {
+        value,
+        source: "fallback",
+        confidence: DEFAULT_SKY_FACTOR_CONFIDENCE,
+      },
+    ]),
+  ) as SkyEnvironment["diagnostics"]["factors"];
+
+  return {
+    timezone,
+    samples: [
+      {
+        timestampMs: atMs,
+        factors: { ...BASELINE_SKY_FACTORS },
+      },
+    ],
+    diagnostics: {
+      factors,
+      providerQuality: "fallback",
+      degraded: true,
+      fallbackReasons: ["second_order_disabled"],
+    },
+  };
+}
 
 export class TimeInPlaceError extends Error {
   public readonly code: string;
@@ -234,13 +276,16 @@ export class TimeInPlaceService {
   async getSkyColorForLocation(coords: Coordinates, options?: SkyComputationOptions): Promise<Sky24hResult> {
     validateCoordinates(coords);
     const atMs = parseTimestamp(options?.atMs ?? this.deps.now());
+    const applySecondOrder = options?.applySecondOrder ?? true;
 
     try {
       const timezone = await this.deps.timezoneProvider.resolve(coords, atMs);
-      const environment = await this.deps.skyEnvironmentProvider.resolve(coords, atMs, timezone.timezone);
+      const environment = applySecondOrder
+        ? await this.deps.skyEnvironmentProvider.resolve(coords, atMs, timezone.timezone)
+        : createFallbackSkyEnvironment(timezone.timezone, atMs);
       return computeSky24h(coords, environment, atMs, {
         factorOverrides: options?.factorOverrides,
-        applySecondOrder: options?.applySecondOrder,
+        applySecondOrder,
       });
     } catch (error) {
       this.rethrowAsUpstream("sky_lookup_failed", "Unable to resolve sky color information.", error);

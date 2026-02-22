@@ -7,69 +7,49 @@
   height: 100vh;
   position: relative;
   overflow: hidden;
+  background-color: midnightblue;
   isolation: isolate;
   display: grid;
   place-items: center;
   animation: home-fade-in 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.home-viewport-sky {
-  position: fixed;
-  inset: -24vmax;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.home-viewport-sky::before,
-.home-viewport-sky::after {
+.home-shell::before,
+.home-shell::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
 }
 
-.home-viewport-sky::before {
+.home-shell::before {
   background:
-    radial-gradient(circle at 50% 50%, #0000 0 22%, #030b1459 52%, #02060dbb 100%),
-    linear-gradient(180deg, #08111d6e, #02050a8e);
+    radial-gradient(circle at 50% 62%, #081325 0 36%, #020811 100%),
+    radial-gradient(circle at 22% 18%, #6d9dc624 0, #0000 44%),
+    radial-gradient(circle at 79% 24%, #8dc7f21e 0, #0000 46%);
 }
 
-.home-viewport-sky::after {
+.home-shell::after {
   background:
-    radial-gradient(circle at 14% 20%, #ffffff26 0, #0000 34%),
-    radial-gradient(circle at 82% 22%, #ffe0a92e 0, #0000 38%),
-    repeating-radial-gradient(circle at center, #ffffff0d 0 2px, #0000 2px 15px);
-  mix-blend-mode: soft-light;
-  opacity: 0.65;
-}
-
-.home-viewport-sky-layer {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  transform-origin: 50% 50%;
-  transition:
-    transform 220ms linear,
-    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1);
-  filter: saturate(1.08) brightness(0.96);
-}
-
-.home-viewport-sky-layer.is-switching {
-  transition:
-    transform 780ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 780ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.home-viewport-sky-layer.is-current {
-  opacity: 1;
-}
-
-.home-viewport-sky-layer.is-previous {
-  opacity: 1;
-}
-
-.home-viewport-sky-layer.is-previous.is-fading-out {
-  opacity: 0;
+    radial-gradient(circle at 6% 19%, #ffffffbf 0 1px, #0000 1.8px),
+    radial-gradient(circle at 16% 72%, #dcebffc2 0 1px, #0000 1.9px),
+    radial-gradient(circle at 27% 43%, #ffffffd1 0 0.9px, #0000 1.7px),
+    radial-gradient(circle at 33% 8%, #f1f8ffb8 0 0.8px, #0000 1.6px),
+    radial-gradient(circle at 39% 85%, #e5f1ffc7 0 0.9px, #0000 1.7px),
+    radial-gradient(circle at 44% 56%, #ffffffd1 0 0.9px, #0000 1.7px),
+    radial-gradient(circle at 49% 25%, #ffffffbf 0 1.1px, #0000 1.9px),
+    radial-gradient(circle at 54% 91%, #eef7ffc2 0 0.8px, #0000 1.6px),
+    radial-gradient(circle at 61% 63%, #dcecffc9 0 0.95px, #0000 1.8px),
+    radial-gradient(circle at 67% 41%, #ffffffcc 0 0.88px, #0000 1.7px),
+    radial-gradient(circle at 72% 14%, #ffffffc7 0 0.95px, #0000 1.8px),
+    radial-gradient(circle at 78% 55%, #eff8ffc4 0 0.82px, #0000 1.6px),
+    radial-gradient(circle at 84% 78%, #ecf6ffd0 0 1px, #0000 1.9px),
+    radial-gradient(circle at 88% 9%, #ffffffc4 0 0.88px, #0000 1.7px),
+    radial-gradient(circle at 93% 36%, #ffffffba 0 0.9px, #0000 1.7px);
+  animation: home-stars-twinkle 8s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
+  opacity: 0.96;
 }
 
 .home-ring-stage {
@@ -86,6 +66,10 @@
   --hour-contrast-ring-width: clamp(32px, calc(var(--ring-size) * 0.041), 52px);
   --hour-contrast-ring-color: rgb(54 60 68 / 24%);
   --hour-tick-radius: calc((var(--ring-core-size) / 2) + (var(--hour-contrast-ring-width) / 2));
+  --rotation-transition-duration: 220ms;
+  --rotation-transition-easing: linear;
+  --rotation-transition-switch-duration: 780ms;
+  --rotation-transition-switch-easing: cubic-bezier(0.22, 1, 0.36, 1);
   width: var(--ring-size);
   aspect-ratio: 1;
   position: relative;
@@ -94,21 +78,11 @@
   transform: none;
 }
 
-.home-ring-frame::before,
 .home-ring-frame::after {
   content: "";
   position: absolute;
   border-radius: 50%;
   pointer-events: none;
-}
-
-.home-ring-frame::before {
-  inset: calc(var(--ring-size) * -0.09);
-  border: 1px solid #d7f2ff21;
-  box-shadow:
-    0 0 0 1px #9bcde033 inset,
-    0 0 72px #8ccaf849,
-    0 0 120px #ffcf8042;
 }
 
 .home-ring-frame::after {
@@ -126,11 +100,9 @@
 .home-sky-ring {
   position: absolute;
   inset: 0;
+  z-index: 2;
   border-radius: 50%;
-  box-shadow:
-    inset 0 0 0 1px #f1fbff2f,
-    0 0 var(--ring-halo-spread) #84c8f740,
-    0 0 calc(var(--ring-halo-spread) * 0.44) #ffcb8e38;
+  box-shadow: inset 0 0 0 1px #f1fbff2f;
   -webkit-mask: radial-gradient(
     circle,
     transparent calc(50% - var(--ring-band-width)),
@@ -145,18 +117,99 @@
     #000 50%,
     transparent 50.5%
   );
-  transition: transform 220ms linear;
+  transition-property: transform;
+  transition-duration: var(--rotation-transition-duration);
+  transition-timing-function: var(--rotation-transition-easing);
   will-change: transform;
 }
 
+.home-sky-ring-glow {
+  z-index: 1;
+  box-shadow: none;
+  opacity: 0.96;
+  filter: blur(52px) saturate(1.28) brightness(1.06);
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.home-sky-ring-glow .home-sky-ring-layer.is-current,
+.home-sky-ring-glow .home-sky-ring-layer.is-previous {
+  opacity: 0.84;
+}
+
 .home-sky-ring.is-switching {
-  transition: transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-duration: var(--rotation-transition-switch-duration);
+  transition-timing-function: var(--rotation-transition-switch-easing);
+}
+
+.home-sky-ring-stars {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  z-index: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 58%, #081224 0 42%, #020710 100%);
+}
+
+.home-sky-ring-stars::before,
+.home-sky-ring-stars::after {
+  content: "";
+  position: absolute;
+  inset: -8%;
+  pointer-events: none;
+}
+
+.home-sky-ring-stars::before {
+  background:
+    radial-gradient(circle at 8% 14%, #ffffffd9 0 0.8px, #0000 1.4px),
+    radial-gradient(circle at 19% 62%, #eef5ffcc 0 1px, #0000 1.8px),
+    radial-gradient(circle at 28% 35%, #f2f8ffb8 0 0.75px, #0000 1.4px),
+    radial-gradient(circle at 31% 91%, #f6fbffc9 0 0.9px, #0000 1.6px),
+    radial-gradient(circle at 39% 79%, #ffffffd0 0 1px, #0000 1.9px),
+    radial-gradient(circle at 45% 46%, #ecf5ffcf 0 0.8px, #0000 1.5px),
+    radial-gradient(circle at 52% 22%, #dce9ffc9 0 0.8px, #0000 1.5px),
+    radial-gradient(circle at 57% 86%, #ffffffcc 0 0.95px, #0000 1.7px),
+    radial-gradient(circle at 63% 64%, #ffffffb8 0 0.95px, #0000 1.8px),
+    radial-gradient(circle at 68% 11%, #ecf4ffc8 0 0.74px, #0000 1.4px),
+    radial-gradient(circle at 73% 29%, #e7f2ffbf 0 0.8px, #0000 1.6px),
+    radial-gradient(circle at 79% 52%, #ffffffc7 0 0.9px, #0000 1.7px),
+    radial-gradient(circle at 86% 74%, #ffffffd6 0 1.05px, #0000 1.8px),
+    radial-gradient(circle at 92% 19%, #ebf5ffd0 0 0.8px, #0000 1.5px),
+    radial-gradient(circle at 13% 86%, #ffffffc9 0 0.95px, #0000 1.7px);
+  opacity: 0.98;
+  animation: home-stars-twinkle 7s ease-in-out infinite alternate;
+}
+
+.home-sky-ring-stars::after {
+  background:
+    radial-gradient(circle at 11% 44%, #ffffffbf 0 0.7px, #0000 1.4px),
+    radial-gradient(circle at 24% 18%, #d5e5ffb0 0 0.95px, #0000 1.6px),
+    radial-gradient(circle at 29% 75%, #ffffffbe 0 0.72px, #0000 1.5px),
+    radial-gradient(circle at 34% 57%, #ffffffc7 0 0.8px, #0000 1.5px),
+    radial-gradient(circle at 46% 11%, #edf6ffb2 0 0.75px, #0000 1.4px),
+    radial-gradient(circle at 49% 67%, #eff8ffc2 0 0.76px, #0000 1.4px),
+    radial-gradient(circle at 58% 82%, #ffffffd3 0 1px, #0000 1.7px),
+    radial-gradient(circle at 67% 42%, #dcebffc4 0 0.82px, #0000 1.4px),
+    radial-gradient(circle at 72% 25%, #ffffffc0 0 0.73px, #0000 1.4px),
+    radial-gradient(circle at 79% 88%, #ffffffbd 0 0.9px, #0000 1.7px),
+    radial-gradient(circle at 88% 52%, #edf6ffbf 0 0.75px, #0000 1.5px),
+    radial-gradient(circle at 95% 8%, #ffffffd6 0 0.95px, #0000 1.7px),
+    radial-gradient(circle at 4% 73%, #e2eeffc2 0 0.75px, #0000 1.4px),
+    radial-gradient(circle at 6% 8%, #ffffffc2 0 0.72px, #0000 1.4px);
+  opacity: 0.78;
+  transform: scale(1.05);
+  filter: blur(0.22px);
+  animation:
+    home-stars-drift 15s linear infinite,
+    home-stars-twinkle 5.2s ease-in-out infinite alternate-reverse;
 }
 
 .home-sky-ring-layer {
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  z-index: 1;
   transition: opacity 780ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -177,7 +230,9 @@
   inset: 0;
   pointer-events: none;
   z-index: 6;
-  transition: transform 220ms linear;
+  transition-property: transform;
+  transition-duration: var(--rotation-transition-duration);
+  transition-timing-function: var(--rotation-transition-easing);
 }
 
 .home-hour-layer::before {
@@ -193,7 +248,8 @@
 }
 
 .home-hour-layer.is-switching {
-  transition: transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition-duration: var(--rotation-transition-switch-duration);
+  transition-timing-function: var(--rotation-transition-switch-easing);
 }
 
 .home-hour-tick {
@@ -234,7 +290,7 @@
   place-content: center;
   text-align: center;
   position: relative;
-  z-index: 12;
+  z-index: 5;
 }
 
 .home-center-copy {
@@ -245,6 +301,23 @@
   margin: 0.92rem 0 0.9rem;
   font: 700 clamp(2.8rem, 7.84vw, 5.46rem) / 0.95 var(--font-display);
   color: #f3faff;
+  min-height: 1em;
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-center-time-flow {
+  min-width: 1.2ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-center-time-separator {
+  display: inline-block;
+  min-width: 0.22em;
+  margin-inline: -0.04em;
+  text-align: center;
+  opacity: 0.86;
 }
 
 .home-center-label {
@@ -255,11 +328,28 @@
   color: #d6e7f4;
 }
 
+.home-center-meta-label {
+  margin: 0;
+  font: 300 clamp(0.64rem, 1.1vw, 0.8rem) / 1.1 var(--font-body);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #93aec2;
+}
+
 .home-center-meta {
-  margin: 0.32rem 0 0;
+  margin: 0.18rem 0 0;
   color: #bbd1e0;
   font-size: clamp(0.86rem, 1.5vw, 1.12rem);
   letter-spacing: 0.09em;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-center-meta-flow {
+  min-width: 1ch;
+  font-variant-numeric: tabular-nums;
 }
 
 .home-ring-error {
@@ -285,6 +375,15 @@
   background: transparent;
   pointer-events: auto;
   cursor: pointer;
+  transition-property: transform;
+  transition-duration: var(--rotation-transition-switch-duration);
+  transition-timing-function: var(--rotation-transition-switch-easing);
+  will-change: transform;
+}
+
+.home-orbit-label.is-switching {
+  transition-duration: var(--rotation-transition-switch-duration);
+  transition-timing-function: var(--rotation-transition-switch-easing);
 }
 
 .home-orbit-chip {
@@ -392,10 +491,6 @@
   white-space: nowrap;
 }
 
-.home-shell--zenith .home-viewport-sky-layer {
-  filter: saturate(1.18) brightness(0.96);
-}
-
 .home-orbit-label:focus-visible .home-orbit-chip {
   outline: 2px solid var(--home-focus);
   outline-offset: 2px;
@@ -420,6 +515,26 @@
 
   to {
     opacity: 1;
+  }
+}
+
+@keyframes home-stars-twinkle {
+  from {
+    opacity: 0.48;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes home-stars-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+
+  to {
+    transform: translate3d(-2.2%, -1.4%, 0) scale(1.08);
   }
 }
 
@@ -481,10 +596,13 @@
 
 @media (prefers-reduced-motion) {
   .home-shell,
-  .home-viewport-sky-layer,
+  .home-shell::after,
   .home-sky-ring,
+  .home-sky-ring-stars::before,
+  .home-sky-ring-stars::after,
   .home-sky-ring-layer,
   .home-hour-layer,
+  .home-orbit-label,
   .home-center-copy,
   .home-orbit-chip {
     animation: none !important;

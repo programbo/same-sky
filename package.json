@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.1",
+    "@number-flow/react": "^0.5.12",
     "bun-plugin-tailwind": "^0.1.2",
     "react": "^19",
     "react-dom": "^19",
