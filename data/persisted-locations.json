@@ -2,88 +2,266 @@
   "version": 2,
   "locations": [
     {
-      "id": "3961e9c0-c96f-45a9-8d62-c083089e62e4",
-      "name": "City of Wodonga, Victoria, Australia",
+      "id": "au-141st-signal-squadron",
+      "name": "Enoggera (Gallipoli Bks) / Townsville (Lavarack Bks), Queensland, Australia",
       "coords": {
-        "lat": -36.131111,
-        "long": 146.937203
+        "lat": -27.4283,
+        "long": 152.9821
       },
-      "nickname": "Bandiana",
+      "nickname": "141st Signal Squadron",
+      "timezone": "Australia/Brisbane",
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "141st Signal Squadron",
+      "countryCode": "AU",
+      "adminState": "Queensland",
+      "adminCity": "Brisbane",
+      "adminSuburb": "Enoggera",
+      "avatarSource": "none",
+      "createdAtMs": 1771773936906
+    },
+    {
+      "id": "au-142nd-signal-squadron",
+      "name": "Holsworthy Barracks, New South Wales, Australia",
+      "coords": {
+        "lat": -33.9904,
+        "long": 150.9522
+      },
+      "nickname": "142nd Signal Squadron",
+      "timezone": "Australia/Sydney",
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "142nd Signal Squadron",
+      "countryCode": "AU",
+      "adminState": "New South Wales",
+      "adminCity": "Sydney",
+      "adminSuburb": "Holsworthy",
+      "avatarSource": "none",
+      "createdAtMs": 1771773935906
+    },
+    {
+      "id": "au-143rd-signal-squadron",
+      "name": "HMAS Harman, Canberra, Australian Capital Territory, Australia",
+      "coords": {
+        "lat": -35.3431,
+        "long": 149.1669
+      },
+      "nickname": "143rd Signal Squadron",
+      "timezone": "Australia/Sydney",
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "143rd Signal Squadron",
+      "countryCode": "AU",
+      "adminState": "Australian Capital Territory",
+      "adminCity": "Canberra",
+      "adminSuburb": "Harman",
+      "avatarSource": "none",
+      "createdAtMs": 1771773934906
+    },
+    {
+      "id": "au-144th-signal-squadron",
+      "name": "Keswick Barracks, Adelaide, South Australia, Australia",
+      "coords": {
+        "lat": -34.9413,
+        "long": 138.5724
+      },
+      "nickname": "144th Signal Squadron",
+      "timezone": "Australia/Adelaide",
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "144th Signal Squadron",
+      "countryCode": "AU",
+      "adminState": "South Australia",
+      "adminCity": "Adelaide",
+      "adminSuburb": "Keswick",
+      "avatarSource": "none",
+      "createdAtMs": 1771773933906
+    },
+    {
+      "id": "au-108th-signal-squadron",
+      "name": "Simpson Barracks, Watsonia (Melbourne), Victoria, Australia",
+      "coords": {
+        "lat": -37.7085,
+        "long": 145.0863
+      },
+      "nickname": "108th Signal Squadron",
       "timezone": "Australia/Melbourne",
-      "granularity": "municipality",
-      "createdAtMs": 1771558317056
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "108th Signal Squadron",
+      "countryCode": "AU",
+      "adminState": "Victoria",
+      "adminCity": "Melbourne",
+      "adminSuburb": "Watsonia",
+      "avatarSource": "none",
+      "createdAtMs": 1771773932906
     },
     {
-      "id": "6a235dc3-0b4b-4d64-b3f4-63f4c638838e",
-      "name": "Alice Springs, Australia",
+      "id": "au-109th-signal-squadron",
+      "name": "Irwin Barracks, Karrakatta (Perth), Western Australia, Australia",
       "coords": {
-        "lat": -23.6983884,
-        "long": 133.8812885
+        "lat": -31.9682,
+        "long": 115.7796
       },
-      "nickname": "Alice Springs",
-      "timezone": "Australia/Darwin",
-      "granularity": "city",
-      "createdAtMs": 1771558645009
-    },
-    {
-      "id": "35cf49b2-1715-440f-81bc-b452ac071fbc",
-      "name": "Phoenix, Arizona, United States",
-      "coords": {
-        "lat": 33.4484367,
-        "long": -112.074141
-      },
-      "nickname": "Phoenix",
-      "timezone": "America/Phoenix",
-      "granularity": "city",
-      "createdAtMs": 1771558694939
-    },
-    {
-      "id": "26edc495-f0f8-47c8-ad87-bfa416b98291",
-      "name": "Australia",
-      "coords": {
-        "lat": -24.7761086,
-        "long": 134.755
-      },
-      "nickname": "Australia",
-      "timezone": "Australia/Darwin",
-      "granularity": "country",
-      "createdAtMs": 1771563330473
-    },
-    {
-      "id": "6498b9bc-dda0-4cbb-8836-7f67c3af3737",
-      "name": "Wandi, Western Australia, Australia",
-      "coords": {
-        "lat": -32.1943168,
-        "long": 115.876973
-      },
-      "nickname": "Wandi",
+      "nickname": "109th Signal Squadron",
       "timezone": "Australia/Perth",
       "granularity": "suburb",
-      "createdAtMs": 1771565637662
+      "kind": "entity",
+      "entityName": "109th Signal Squadron",
+      "countryCode": "AU",
+      "adminState": "Western Australia",
+      "adminCity": "Perth",
+      "adminSuburb": "Karrakatta",
+      "avatarSource": "none",
+      "createdAtMs": 1771773931906
     },
     {
-      "id": "de46d38b-cf7e-4d4f-b920-886c2f12ea81",
-      "name": "Singapore, Singapore",
+      "id": "uk-37th-signal-regiment",
+      "name": "Redditch (Gamecock Barracks), England, United Kingdom",
       "coords": {
-        "lat": 1.2899175,
-        "long": 103.8519072
+        "lat": 52.3065,
+        "long": -1.9456
       },
-      "nickname": "Singapore",
-      "timezone": "Asia/Singapore",
+      "nickname": "37th Signal Regiment",
+      "timezone": "Europe/London",
       "granularity": "city",
-      "createdAtMs": 1771565754282
+      "kind": "entity",
+      "entityName": "37th Signal Regiment",
+      "countryCode": "GB",
+      "adminState": "England",
+      "adminCity": "Redditch",
+      "avatarSource": "none",
+      "createdAtMs": 1771773930906
     },
     {
-      "id": "f374c5c4-f3e1-479c-9135-a5f211ce5aa9",
-      "name": "Singapore",
+      "id": "uk-14th-signal-regiment-ew",
+      "name": "Stert, Wiltshire, England, United Kingdom",
       "coords": {
-        "lat": 1.357107,
-        "long": 103.8194992
+        "lat": 51.3468,
+        "long": -1.9933
       },
-      "nickname": "Singapore",
-      "timezone": "Asia/Singapore",
-      "granularity": "country",
-      "createdAtMs": 1771576369045
+      "nickname": "14th Signal Regiment (EW)",
+      "timezone": "Europe/London",
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "14th Signal Regiment (EW)",
+      "countryCode": "GB",
+      "adminState": "England",
+      "adminCity": "Devizes",
+      "adminSuburb": "Stert",
+      "avatarSource": "none",
+      "createdAtMs": 1771773929906
+    },
+    {
+      "id": "ca-38-signal-regiment",
+      "name": "Regina, Saskatchewan, Canada",
+      "coords": {
+        "lat": 50.4452,
+        "long": -104.6189
+      },
+      "nickname": "38 Signal Regiment",
+      "timezone": "America/Regina",
+      "granularity": "city",
+      "kind": "entity",
+      "entityName": "38 Signal Regiment",
+      "countryCode": "CA",
+      "adminState": "Saskatchewan",
+      "adminCity": "Regina",
+      "avatarSource": "none",
+      "createdAtMs": 1771773928906
+    },
+    {
+      "id": "ca-39-signal-regiment",
+      "name": "Vancouver, British Columbia, Canada",
+      "coords": {
+        "lat": 49.2827,
+        "long": -123.1207
+      },
+      "nickname": "39 Signal Regiment",
+      "timezone": "America/Vancouver",
+      "granularity": "city",
+      "kind": "entity",
+      "entityName": "39 Signal Regiment",
+      "countryCode": "CA",
+      "adminState": "British Columbia",
+      "adminCity": "Vancouver",
+      "avatarSource": "none",
+      "createdAtMs": 1771773927906
+    },
+    {
+      "id": "ca-41-signal-regiment",
+      "name": "Edmonton / Calgary, Alberta, Canada",
+      "coords": {
+        "lat": 53.5461,
+        "long": -113.4938
+      },
+      "nickname": "41 Signal Regiment",
+      "timezone": "America/Edmonton",
+      "granularity": "city",
+      "kind": "entity",
+      "entityName": "41 Signal Regiment",
+      "countryCode": "CA",
+      "adminState": "Alberta",
+      "adminCity": "Edmonton",
+      "avatarSource": "none",
+      "createdAtMs": 1771773926906
+    },
+    {
+      "id": "nz-1st-signal-squadron",
+      "name": "Palmerston North (Linton Camp), Manawatu-Wanganui, New Zealand",
+      "coords": {
+        "lat": -40.3538,
+        "long": 175.6082
+      },
+      "nickname": "1st Signal Squadron",
+      "timezone": "Pacific/Auckland",
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "1st Signal Squadron",
+      "countryCode": "NZ",
+      "adminState": "Manawatu-Wanganui",
+      "adminCity": "Palmerston North",
+      "adminSuburb": "Linton",
+      "avatarSource": "none",
+      "createdAtMs": 1771773925906
+    },
+    {
+      "id": "nz-2nd-signal-squadron",
+      "name": "Linton Military Camp, Manawatu-Wanganui, New Zealand",
+      "coords": {
+        "lat": -40.3478,
+        "long": 175.6024
+      },
+      "nickname": "2nd Signal Squadron",
+      "timezone": "Pacific/Auckland",
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "2nd Signal Squadron",
+      "countryCode": "NZ",
+      "adminState": "Manawatu-Wanganui",
+      "adminCity": "Palmerston North",
+      "adminSuburb": "Linton",
+      "avatarSource": "none",
+      "createdAtMs": 1771773924906
+    },
+    {
+      "id": "nz-3rd-signals-squadron-ew",
+      "name": "Burnham Camp, Canterbury, New Zealand",
+      "coords": {
+        "lat": -43.6151,
+        "long": 172.3198
+      },
+      "nickname": "3rd Signals Squadron (EW)",
+      "timezone": "Pacific/Auckland",
+      "granularity": "suburb",
+      "kind": "entity",
+      "entityName": "3rd Signals Squadron (EW)",
+      "countryCode": "NZ",
+      "adminState": "Canterbury",
+      "adminCity": "Christchurch",
+      "adminSuburb": "Burnham",
+      "avatarSource": "none",
+      "createdAtMs": 1771773923906
     }
   ]
 }
