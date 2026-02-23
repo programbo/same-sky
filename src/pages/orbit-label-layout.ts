@@ -59,6 +59,34 @@ interface Rect {
 
 type CornerKey = "top-left" | "top-right" | "bottom-left" | "bottom-right"
 
+interface CandidatePlacement {
+  rect: Rect
+  spokeX: number
+  spokeY: number
+  corner: CornerKey | null
+  lane: number
+  cornerIndex: number
+  lanePenalty: number
+  overflow: number
+  selectedOverflow: number
+  ringOverlap: number
+  selectedTopViolation: number
+}
+
+interface BeamState {
+  placements: CandidatePlacement[]
+  occupied: Rect[]
+  selectedTopViolation: number
+  selectedOverflow: number
+  ringOverlap: number
+  hardOverlapCount: number
+  softOverlapCount: number
+  overflow: number
+  hardOverlapArea: number
+  lanePenalty: number
+  tieBreaker: string
+}
+
 function toAngleRad(angleDeg: number): number {
   return (angleDeg * Math.PI) / 180
 }
@@ -74,6 +102,18 @@ function overlapWithGap(left: Rect, right: Rect, gap: number): boolean {
     left.y + left.height + gap <= right.y ||
     right.y + right.height + gap <= left.y
   )
+}
+
+function rectOverlapArea(left: Rect, right: Rect): number {
+  const overlapX = Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x)
+  if (overlapX <= 0) {
+    return 0
+  }
+  const overlapY = Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y)
+  if (overlapY <= 0) {
+    return 0
+  }
+  return overlapX * overlapY
 }
 
 function sideOfNormal(normalX: number): OrbitRailSide {
@@ -275,6 +315,63 @@ function spokePointFromRect(
   }
 }
 
+function compareCandidate(left: CandidatePlacement, right: CandidatePlacement): number {
+  if (left.selectedTopViolation !== right.selectedTopViolation) {
+    return left.selectedTopViolation - right.selectedTopViolation
+  }
+  if (left.selectedOverflow !== right.selectedOverflow) {
+    return left.selectedOverflow - right.selectedOverflow
+  }
+  if (left.ringOverlap !== right.ringOverlap) {
+    return left.ringOverlap - right.ringOverlap
+  }
+  if (left.overflow !== right.overflow) {
+    return left.overflow - right.overflow
+  }
+  const absLaneDelta = Math.abs(left.lane) - Math.abs(right.lane)
+  if (absLaneDelta !== 0) {
+    return absLaneDelta
+  }
+  if (left.lane !== right.lane) {
+    return left.lane - right.lane
+  }
+  if (left.cornerIndex !== right.cornerIndex) {
+    return left.cornerIndex - right.cornerIndex
+  }
+  if (left.spokeY !== right.spokeY) {
+    return left.spokeY - right.spokeY
+  }
+  return left.spokeX - right.spokeX
+}
+
+function compareBeamState(left: BeamState, right: BeamState): number {
+  if (left.selectedTopViolation !== right.selectedTopViolation) {
+    return left.selectedTopViolation - right.selectedTopViolation
+  }
+  if (left.selectedOverflow !== right.selectedOverflow) {
+    return left.selectedOverflow - right.selectedOverflow
+  }
+  if (left.ringOverlap !== right.ringOverlap) {
+    return left.ringOverlap - right.ringOverlap
+  }
+  if (left.hardOverlapCount !== right.hardOverlapCount) {
+    return left.hardOverlapCount - right.hardOverlapCount
+  }
+  if (left.softOverlapCount !== right.softOverlapCount) {
+    return left.softOverlapCount - right.softOverlapCount
+  }
+  if (left.overflow !== right.overflow) {
+    return left.overflow - right.overflow
+  }
+  if (left.hardOverlapArea !== right.hardOverlapArea) {
+    return left.hardOverlapArea - right.hardOverlapArea
+  }
+  if (left.lanePenalty !== right.lanePenalty) {
+    return left.lanePenalty - right.lanePenalty
+  }
+  return left.tieBreaker.localeCompare(right.tieBreaker)
+}
+
 export function computeOrbitLabelLayout(
   inputs: OrbitLabelLayoutInput[],
   config: LayoutConfig,
@@ -341,22 +438,41 @@ export function computeOrbitLabelLayout(
   const occupied: Rect[] = []
 
   const labels: OrbitLabelLayout[] = []
+  const beamWidth = config.isMobile ? 34 : 48
+  const maxCandidatesPerNode = config.isMobile ? 120 : 180
 
-  for (const node of nodes) {
-    let bestRect = rectFromCenter(node.anchorX, node.anchorY, node.width, node.height)
-    let bestSpokeX = node.anchorX
-    let bestSpokeY = node.anchorY
-    let bestCorner: CornerKey | null = node.isSelected ? null : hubFacingCorner(node.normalX, node.normalY)
-    let bestPenalty = Number.POSITIVE_INFINITY
-    let placed = false
+  let beam: BeamState[] = [
+    {
+      placements: [],
+      occupied: [],
+      selectedTopViolation: 0,
+      selectedOverflow: 0,
+      ringOverlap: 0,
+      hardOverlapCount: 0,
+      softOverlapCount: 0,
+      overflow: 0,
+      hardOverlapArea: 0,
+      lanePenalty: 0,
+      tieBreaker: "",
+    },
+  ]
+
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index]
+    if (!node) {
+      continue
+    }
+
     const cornerCandidates = node.isSelected ? [null] : axisFlexibleCornerCandidates(node.normalX, node.normalY)
     const maxInwardLane = node.isSelected ? 0 : (config.isMobile ? 2 : 3)
     const candidateLanes = laneOffsets(maxLane, maxInwardLane)
+    const localCandidates: CandidatePlacement[] = []
 
     for (const lane of candidateLanes) {
       const distance = node.baseDistance + lane * radialLaneStep
       const candidateSpokeX = node.anchorX + node.normalX * distance
       const candidateSpokeY = node.anchorY + node.normalY * distance
+
       for (let cornerIndex = 0; cornerIndex < cornerCandidates.length; cornerIndex += 1) {
         const corner = cornerCandidates[cornerIndex] ?? null
         const candidateRect = rectFromSpokePoint(
@@ -368,42 +484,91 @@ export function computeOrbitLabelLayout(
           corner,
           config.isMobile,
         )
-        const hasOverlap = occupied.some((rect) => overlapWithGap(candidateRect, rect, minGap))
+
         const overflow = frameOverflow(candidateRect, config.frameWidth, config.frameHeight, framePadding)
         const ringOverlap = ringIntrusion(candidateRect, centerX, centerY, forbiddenRingRadius)
         const selectedTopViolation = node.isSelected
           ? selectedMustStayAboveRingViolation(candidateRect, centerY, forbiddenRingRadius)
           : 0
-        const lanePenalty =
-          Math.abs(lane) * (node.isSelected ? 110 : 92) + (lane > 0 ? (node.isSelected ? 24 : 8) : 0)
-        const overflowPenalty = overflow * (node.isSelected ? 10_000 : 6)
-        const ringPenalty = ringOverlap * (node.isSelected ? 20_000 : 14_000)
-        const selectedTopPenalty = selectedTopViolation * 22_000
-        const overlapPenalty = hasOverlap ? (node.isSelected ? 2_200 : 10_000) : 0
-        const penalty = lanePenalty + cornerIndex * 6 + overflowPenalty + ringPenalty + selectedTopPenalty + overlapPenalty
+        const selectedOverflow = node.isSelected ? overflow : 0
+        const lanePenalty = Math.abs(lane) * (node.isSelected ? 110 : 92) + (lane > 0 ? (node.isSelected ? 24 : 8) : 0)
 
-        if (!hasOverlap && overflow === 0 && ringOverlap === 0 && selectedTopViolation === 0) {
-          bestRect = candidateRect
-          bestSpokeX = candidateSpokeX
-          bestSpokeY = candidateSpokeY
-          bestCorner = corner
-          placed = true
-          break
-        }
-
-        if (penalty < bestPenalty) {
-          bestPenalty = penalty
-          bestRect = candidateRect
-          bestSpokeX = candidateSpokeX
-          bestSpokeY = candidateSpokeY
-          bestCorner = corner
-        }
-      }
-
-      if (placed) {
-        break
+        localCandidates.push({
+          rect: candidateRect,
+          spokeX: candidateSpokeX,
+          spokeY: candidateSpokeY,
+          corner,
+          lane,
+          cornerIndex,
+          lanePenalty,
+          overflow,
+          selectedOverflow,
+          ringOverlap,
+          selectedTopViolation,
+        })
       }
     }
+
+    localCandidates.sort(compareCandidate)
+    const boundedCandidates = localCandidates.slice(0, maxCandidatesPerNode)
+    const nextBeam: BeamState[] = []
+
+    for (const state of beam) {
+      for (const candidate of boundedCandidates) {
+        let hardOverlapCount = state.hardOverlapCount
+        let softOverlapCount = state.softOverlapCount
+        let hardOverlapArea = state.hardOverlapArea
+
+        for (const rect of state.occupied) {
+          const overlapArea = rectOverlapArea(candidate.rect, rect)
+          if (overlapArea > 0) {
+            hardOverlapCount += 1
+            hardOverlapArea += overlapArea
+          }
+          if (overlapWithGap(candidate.rect, rect, minGap)) {
+            softOverlapCount += 1
+          }
+        }
+
+        const tieLane = candidate.lane.toString(36)
+        const tieCorner = candidate.cornerIndex.toString(36)
+        const tieX = Math.round(candidate.rect.x).toString(36)
+        const tieY = Math.round(candidate.rect.y).toString(36)
+
+        nextBeam.push({
+          placements: [...state.placements, candidate],
+          occupied: [...state.occupied, candidate.rect],
+          selectedTopViolation: state.selectedTopViolation + candidate.selectedTopViolation,
+          selectedOverflow: state.selectedOverflow + candidate.selectedOverflow,
+          ringOverlap: state.ringOverlap + candidate.ringOverlap,
+          hardOverlapCount,
+          softOverlapCount,
+          overflow: state.overflow + candidate.overflow,
+          hardOverlapArea,
+          lanePenalty: state.lanePenalty + candidate.lanePenalty + candidate.cornerIndex * 6,
+          tieBreaker: `${state.tieBreaker}|${tieLane}:${tieCorner}:${tieX}:${tieY}`,
+        })
+      }
+    }
+
+    nextBeam.sort(compareBeamState)
+    beam = nextBeam.slice(0, beamWidth)
+  }
+
+  const bestState = beam[0]
+  const bestPlacements = bestState?.placements ?? []
+
+  for (let index = 0; index < nodes.length; index += 1) {
+    const node = nodes[index]
+    const placement = bestPlacements[index]
+    if (!node || !placement) {
+      continue
+    }
+
+    let bestRect = placement.rect
+    let bestSpokeX = placement.spokeX
+    let bestSpokeY = placement.spokeY
+    const bestCorner = placement.corner
 
     const edge = spokePointFromRect(bestRect, node.isSelected, bestCorner, config.isMobile)
     if (Math.abs(edge.x - bestSpokeX) > 0.1 || Math.abs(edge.y - bestSpokeY) > 0.1) {

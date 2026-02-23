@@ -133,6 +133,34 @@ export interface UtcOffsetParts {
   minutes: number
 }
 
+export interface RingFrameSnapshot {
+  wheelRotationDeg: number
+}
+
+export interface OrbitFrameSnapshot {
+  selectionId: string | null
+  selectedLayoutId: string | null
+  frozenNowMs: number
+  layoutById: Map<string, OrbitLabelLayout>
+  order: string[]
+  orbitSizePx: number
+}
+
+export interface OrbitTransitionPlan {
+  startedAtMs: number
+  durationMs: number
+  frozenNowMs: number
+  fromSelectionId: string | null
+  toSelectionId: string | null
+  fromRingRotationDeg: number
+  toRingRotationDeg: number
+  sweepDirection: number
+  fromLayoutById: Map<string, OrbitLabelLayout>
+  toLayoutById: Map<string, OrbitLabelLayout>
+  order: string[]
+  orbitSizePx: number
+}
+
 export interface HomeClockViewModel {
   ringFrameRef: React.RefObject<HTMLDivElement | null>
   conceptVars: React.CSSProperties
@@ -223,6 +251,239 @@ function normalizeMinutesOfDay(value: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
+}
+
+function easeSelectionTransition(progress: number): number {
+  const t = clamp(progress, 0, 1)
+  return 1 - Math.pow(1 - t, 3)
+}
+
+function lerpNumber(start: number, end: number, progress: number): number {
+  return start + (end - start) * progress
+}
+
+function normalizeAngleDeltaRad(fromRad: number, toRad: number): number {
+  let delta = toRad - fromRad
+  while (delta > Math.PI) {
+    delta -= Math.PI * 2
+  }
+  while (delta < -Math.PI) {
+    delta += Math.PI * 2
+  }
+  return delta
+}
+
+function interpolateOrbitPoint(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  centerX: number,
+  centerY: number,
+  direction: number,
+  progress: number,
+): { x: number; y: number } {
+  const fromX = startX - centerX
+  const fromY = startY - centerY
+  const toX = endX - centerX
+  const toY = endY - centerY
+
+  const fromRadius = Math.hypot(fromX, fromY)
+  const toRadius = Math.hypot(toX, toY)
+  if (fromRadius < 0.001 || toRadius < 0.001) {
+    return {
+      x: lerpNumber(startX, endX, progress),
+      y: lerpNumber(startY, endY, progress),
+    }
+  }
+
+  const fromAngle = Math.atan2(fromY, fromX)
+  const toAngle = Math.atan2(toY, toX)
+  let deltaAngle = normalizeAngleDeltaRad(fromAngle, toAngle)
+  if (direction !== 0 && Math.sign(deltaAngle) !== 0 && Math.sign(deltaAngle) !== direction) {
+    deltaAngle += direction > 0 ? Math.PI * 2 : -Math.PI * 2
+  }
+
+  const angle = fromAngle + deltaAngle * progress
+  const radius = lerpNumber(fromRadius, toRadius, progress)
+  return {
+    x: centerX + Math.cos(angle) * radius,
+    y: centerY + Math.sin(angle) * radius,
+  }
+}
+
+function buildSpokePath(startX: number, startY: number, endX: number, endY: number): string {
+  return `M ${startX.toFixed(2)} ${startY.toFixed(2)} L ${endX.toFixed(2)} ${endY.toFixed(2)}`
+}
+
+function buildBranchPath(anchorX: number, anchorY: number, edgeX: number, edgeY: number): string {
+  return `M ${anchorX.toFixed(2)} ${anchorY.toFixed(2)} L ${edgeX.toFixed(2)} ${edgeY.toFixed(2)}`
+}
+
+function cloneOrbitLabelLayout(layout: OrbitLabelLayout): OrbitLabelLayout {
+  return {
+    ...layout,
+    members: layout.members.map((member) => ({ ...member })),
+  }
+}
+
+function findSelectedLayoutId(layouts: OrbitLabelLayout[]): string | null {
+  return layouts.find((layout) => layout.isSelected)?.id ?? null
+}
+
+function createLayoutMap(layouts: OrbitLabelLayout[]): Map<string, OrbitLabelLayout> {
+  return new Map(layouts.map((layout) => [layout.id, cloneOrbitLabelLayout(layout)]))
+}
+
+export function computeSweepDirectionFromSnapshots(
+  fromLayoutById: Map<string, OrbitLabelLayout>,
+  toLayoutById: Map<string, OrbitLabelLayout>,
+  orbitSizePx: number,
+  preferredLayoutId: string | null,
+): number {
+  const centerX = orbitSizePx / 2
+  const centerY = orbitSizePx / 2
+  const candidateIds: string[] = []
+  if (preferredLayoutId) {
+    candidateIds.push(preferredLayoutId)
+  }
+  const selectedToId = [...toLayoutById.values()].find((layout) => layout.isSelected)?.id
+  if (selectedToId && !candidateIds.includes(selectedToId)) {
+    candidateIds.push(selectedToId)
+  }
+  const firstToId = toLayoutById.keys().next().value as string | undefined
+  if (firstToId && !candidateIds.includes(firstToId)) {
+    candidateIds.push(firstToId)
+  }
+
+  for (const id of candidateIds) {
+    const from = fromLayoutById.get(id)
+    const to = toLayoutById.get(id)
+    if (!from || !to) {
+      continue
+    }
+
+    const fromAngle = Math.atan2(from.y - centerY, from.x - centerX)
+    const toAngle = Math.atan2(to.y - centerY, to.x - centerX)
+    const delta = normalizeAngleDeltaRad(fromAngle, toAngle)
+    const direction = Math.sign(delta)
+    if (direction !== 0) {
+      return direction
+    }
+  }
+
+  return 0
+}
+
+export function createOrbitTransitionPlan(params: {
+  startedAtMs: number
+  durationMs: number
+  frozenNowMs: number
+  fromSelectionId: string | null
+  toSelectionId: string | null
+  fromRing: RingFrameSnapshot
+  toRing: RingFrameSnapshot
+  fromLayouts: OrbitLabelLayout[]
+  toLayouts: OrbitLabelLayout[]
+  orbitSizePx: number
+  preferredSweepLayoutId: string | null
+}): OrbitTransitionPlan {
+  const fromLayoutById = createLayoutMap(params.fromLayouts)
+  const toLayoutById = createLayoutMap(params.toLayouts)
+  const order = params.toLayouts.map((layout) => layout.id)
+  const sweepDirection = computeSweepDirectionFromSnapshots(
+    fromLayoutById,
+    toLayoutById,
+    params.orbitSizePx,
+    params.preferredSweepLayoutId,
+  )
+
+  return {
+    startedAtMs: params.startedAtMs,
+    durationMs: params.durationMs,
+    frozenNowMs: params.frozenNowMs,
+    fromSelectionId: params.fromSelectionId,
+    toSelectionId: params.toSelectionId,
+    fromRingRotationDeg: params.fromRing.wheelRotationDeg,
+    toRingRotationDeg: params.toRing.wheelRotationDeg,
+    sweepDirection,
+    fromLayoutById,
+    toLayoutById,
+    order,
+    orbitSizePx: params.orbitSizePx,
+  }
+}
+
+export function interpolateOrbitTransitionPlan(plan: OrbitTransitionPlan, progress: number): {
+  wheelRotationDeg: number
+  layout: OrbitLabelLayout[]
+} {
+  const t = clamp(progress, 0, 1)
+  const centerX = plan.orbitSizePx / 2
+  const centerY = plan.orbitSizePx / 2
+
+  const layout = plan.order
+    .map((id) => {
+      const target = plan.toLayoutById.get(id)
+      if (!target) {
+        return null
+      }
+      const source = plan.fromLayoutById.get(id)
+      if (!source) {
+        return cloneOrbitLabelLayout(target)
+      }
+
+      const framePosition = interpolateOrbitPoint(
+        source.x,
+        source.y,
+        target.x,
+        target.y,
+        centerX,
+        centerY,
+        target.isSelected ? plan.sweepDirection : 0,
+        t,
+      )
+      const frameAnchor = interpolateOrbitPoint(
+        source.anchorX,
+        source.anchorY,
+        target.anchorX,
+        target.anchorY,
+        centerX,
+        centerY,
+        target.isSelected ? plan.sweepDirection : 0,
+        t,
+      )
+      const frameSpokeEnd = interpolateOrbitPoint(
+        source.spokeEndX,
+        source.spokeEndY,
+        target.spokeEndX,
+        target.spokeEndY,
+        centerX,
+        centerY,
+        target.isSelected ? plan.sweepDirection : 0,
+        t,
+      )
+
+      return {
+        ...cloneOrbitLabelLayout(target),
+        x: framePosition.x,
+        y: framePosition.y,
+        width: lerpNumber(source.width, target.width, t),
+        height: lerpNumber(source.height, target.height, t),
+        anchorX: frameAnchor.x,
+        anchorY: frameAnchor.y,
+        spokeEndX: frameSpokeEnd.x,
+        spokeEndY: frameSpokeEnd.y,
+        spokePath: buildSpokePath(frameAnchor.x, frameAnchor.y, frameSpokeEnd.x, frameSpokeEnd.y),
+        branchPath: buildBranchPath(frameAnchor.x, frameAnchor.y, frameSpokeEnd.x, frameSpokeEnd.y),
+      } satisfies OrbitLabelLayout
+    })
+    .filter((value): value is OrbitLabelLayout => value !== null)
+
+  return {
+    wheelRotationDeg: lerpNumber(plan.fromRingRotationDeg, plan.toRingRotationDeg, t),
+    layout,
+  }
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
@@ -610,6 +871,14 @@ function useIsMobile(): boolean {
   return isMobile
 }
 
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false
+  }
+
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches
+}
+
 function sortByLabel(left: PersistedLocationApiResult, right: PersistedLocationApiResult): number {
   return locationDisplayLabel(left).toLocaleLowerCase().localeCompare(locationDisplayLabel(right).toLocaleLowerCase())
 }
@@ -703,11 +972,12 @@ export function useHomeClockModel(): HomeClockViewModel {
   const [displayedWheelGradient, setDisplayedWheelGradient] = useState<string>(() => buildConicGradient([]))
   const [previousWheelGradient, setPreviousWheelGradient] = useState<string | null>(null)
   const [isGradientTransitioning, setIsGradientTransitioning] = useState<boolean>(false)
-  const [ringMotionToken, setRingMotionToken] = useState<number>(0)
   const [gradientTransitionToken, setGradientTransitionToken] = useState<number>(0)
   const [isRingTransitioning, setIsRingTransitioning] = useState<boolean>(false)
   const [wheelBaseRotationDeg, setWheelBaseRotationDeg] = useState<number>(0)
+  const [displayWheelRotation, setDisplayWheelRotation] = useState<number>(0)
   const [centerCopyTransitionKey, setCenterCopyTransitionKey] = useState<number>(0)
+  const [displayOrbitLabelLayout, setDisplayOrbitLabelLayout] = useState<OrbitLabelLayout[]>([])
 
   const ringFrameRef = useRef<HTMLDivElement | null>(null)
   const lastSelectedIdRef = useRef<string | null>(null)
@@ -716,10 +986,16 @@ export function useHomeClockModel(): HomeClockViewModel {
   const lastAnimatedGradientTokenRef = useRef<number>(0)
   const gradientFadeTimerRef = useRef<number | null>(null)
   const gradientFadeRafRef = useRef<number | null>(null)
-  const ringTransitionTimerRef = useRef<number | null>(null)
   const wheelBaseRotationRef = useRef<number | null>(null)
   const ringRotationDirectionRef = useRef<number>(0)
   const selectedOrbitAnchorRef = useRef<number | null>(null)
+  const orbitTransitionRafRef = useRef<number | null>(null)
+  const orbitTransitionPlanRef = useRef<OrbitTransitionPlan | null>(null)
+  const isOrbitTransitioningRef = useRef<boolean>(false)
+  const displayOrbitLabelLayoutRef = useRef<OrbitLabelLayout[]>([])
+  const displayWheelRotationRef = useRef<number>(0)
+  const previousOrbitSelectionIdRef = useRef<string | null>(selectedId)
+  const pendingOrbitTransitionTargetRef = useRef<string | null>(null)
 
   const isMobile = useIsMobile()
   const conceptTokens = ZENITH_TOKENS
@@ -972,6 +1248,148 @@ export function useHomeClockModel(): HomeClockViewModel {
   }, [orbitLayoutResult.labels, orbitLabelGroupLookup])
 
   useEffect(() => {
+    displayOrbitLabelLayoutRef.current = displayOrbitLabelLayout
+  }, [displayOrbitLabelLayout])
+
+  useEffect(() => {
+    displayWheelRotationRef.current = displayWheelRotation
+  }, [displayWheelRotation])
+
+  useLayoutEffect(() => {
+    const previousSelectionId = previousOrbitSelectionIdRef.current
+    const selectionChanged = previousSelectionId !== null && selectedId !== previousSelectionId
+    previousOrbitSelectionIdRef.current = selectedId
+    if (selectionChanged) {
+      pendingOrbitTransitionTargetRef.current = selectedId
+    }
+
+    const pendingTargetSelectionId = pendingOrbitTransitionTargetRef.current
+    if (!pendingTargetSelectionId || pendingTargetSelectionId !== selectedId) {
+      return
+    }
+
+    const targetAnchor = selectedOrbitAnchorRef.current
+    const anchorSettled = targetAnchor === null || Math.abs(targetAnchor - selectedOrbitAnchorDeg) < 0.001
+    if (!anchorSettled) {
+      return
+    }
+    pendingOrbitTransitionTargetRef.current = null
+
+    if (orbitTransitionRafRef.current !== null) {
+      window.cancelAnimationFrame(orbitTransitionRafRef.current)
+      orbitTransitionRafRef.current = null
+    }
+
+    const frozenNowMs = Date.now()
+    const sourceLayout = displayOrbitLabelLayoutRef.current.length > 0 ? displayOrbitLabelLayoutRef.current : orbitLabelLayout
+    const toLayouts = orbitLabelLayout.map((layout) => cloneOrbitLabelLayout(layout))
+    const fromRing = Number.isFinite(displayWheelRotationRef.current) ? displayWheelRotationRef.current : wheelRotation
+    let toRing = wheelRotation
+    if (selectedLocation) {
+      try {
+        const preview = computeSky24h(
+          { lat: selectedLocation.lat, long: selectedLocation.long },
+          createClientBaselineEnvironment(selectedTimezone),
+          frozenNowMs,
+          { applySecondOrder: false },
+        )
+        const delta = shortestAngleDeltaDeg(fromRing, preview.rotationDeg)
+        toRing = fromRing + delta
+      } catch {
+        toRing = wheelRotation
+      }
+    }
+
+    const toSelectionLayoutId = findSelectedLayoutId(toLayouts)
+    const plan = createOrbitTransitionPlan({
+      startedAtMs: performance.now(),
+      durationMs: SELECTION_TRANSITION_MS,
+      frozenNowMs,
+      fromSelectionId: previousSelectionId,
+      toSelectionId: selectedId,
+      fromRing: { wheelRotationDeg: fromRing },
+      toRing: { wheelRotationDeg: toRing },
+      fromLayouts: sourceLayout,
+      toLayouts,
+      orbitSizePx: labelOrbitSizePx,
+      preferredSweepLayoutId: toSelectionLayoutId,
+    })
+
+    orbitTransitionPlanRef.current = plan
+    isOrbitTransitioningRef.current = true
+    setIsRingTransitioning(true)
+    setDisplayCenterTime(formatTimeInZone(selectedTimezone, frozenNowMs))
+    if (timeCounterRafRef.current !== null) {
+      window.cancelAnimationFrame(timeCounterRafRef.current)
+      timeCounterRafRef.current = null
+    }
+    isTimeCounterAnimatingRef.current = false
+    lastSelectionForTimeCounterRef.current = selectedId
+
+    const commitPlan = (targetPlan: OrbitTransitionPlan) => {
+      const finalLayout = targetPlan.order
+        .map((id) => targetPlan.toLayoutById.get(id))
+        .filter((layout): layout is OrbitLabelLayout => layout !== undefined)
+        .map((layout) => cloneOrbitLabelLayout(layout))
+      displayOrbitLabelLayoutRef.current = finalLayout
+      displayWheelRotationRef.current = targetPlan.toRingRotationDeg
+      setDisplayOrbitLabelLayout(finalLayout)
+      setDisplayWheelRotation(targetPlan.toRingRotationDeg)
+      orbitTransitionPlanRef.current = null
+      isOrbitTransitioningRef.current = false
+      setIsRingTransitioning(false)
+      setDisplayCenterTime(formatTimeInZone(selectedTimezone, Date.now()))
+      lastSelectionForTimeCounterRef.current = targetPlan.toSelectionId
+    }
+
+    if (prefersReducedMotion()) {
+      commitPlan(plan)
+      return
+    }
+
+    const tick = (frameNowMs: number) => {
+      const activePlan = orbitTransitionPlanRef.current
+      if (!activePlan) {
+        orbitTransitionRafRef.current = null
+        return
+      }
+
+      const progress = clamp((frameNowMs - activePlan.startedAtMs) / activePlan.durationMs, 0, 1)
+      const easedProgress = easeSelectionTransition(progress)
+      const frame = interpolateOrbitTransitionPlan(activePlan, easedProgress)
+      displayOrbitLabelLayoutRef.current = frame.layout
+      displayWheelRotationRef.current = frame.wheelRotationDeg
+      setDisplayOrbitLabelLayout(frame.layout)
+      setDisplayWheelRotation(frame.wheelRotationDeg)
+
+      if (progress >= 1) {
+        orbitTransitionRafRef.current = null
+        commitPlan(activePlan)
+        return
+      }
+
+      orbitTransitionRafRef.current = window.requestAnimationFrame(tick)
+    }
+
+    orbitTransitionRafRef.current = window.requestAnimationFrame(tick)
+  }, [labelOrbitSizePx, orbitLabelLayout, selectedId, selectedLocation, selectedTimezone, selectedOrbitAnchorDeg, wheelRotation])
+
+  useEffect(() => {
+    if (
+      isOrbitTransitioningRef.current ||
+      orbitTransitionPlanRef.current !== null ||
+      pendingOrbitTransitionTargetRef.current !== null
+    ) {
+      return
+    }
+
+    displayOrbitLabelLayoutRef.current = orbitLabelLayout
+    displayWheelRotationRef.current = wheelRotation
+    setDisplayOrbitLabelLayout(orbitLabelLayout)
+    setDisplayWheelRotation(wheelRotation)
+  }, [orbitLabelLayout, wheelRotation])
+
+  useEffect(() => {
     const lastSelectedId = lastSelectedIdRef.current
     if (lastSelectedId === null) {
       lastSelectedIdRef.current = selectedId
@@ -1028,22 +1446,6 @@ export function useHomeClockModel(): HomeClockViewModel {
     lastAnimatedGradientTokenRef.current = gradientTransitionToken
   }, [wheelGradient, displayedWheelGradient, gradientTransitionToken])
 
-  useEffect(() => {
-    if (ringMotionToken === 0) {
-      return
-    }
-
-    setIsRingTransitioning(true)
-    if (ringTransitionTimerRef.current !== null) {
-      window.clearTimeout(ringTransitionTimerRef.current)
-    }
-
-    ringTransitionTimerRef.current = window.setTimeout(() => {
-      setIsRingTransitioning(false)
-      ringTransitionTimerRef.current = null
-    }, SELECTION_TRANSITION_MS)
-  }, [ringMotionToken])
-
   const loadSavedLocations = useCallback(async () => {
     try {
       const response = await fetch(new URL("/api/locations/persisted", window.location.origin))
@@ -1088,6 +1490,10 @@ export function useHomeClockModel(): HomeClockViewModel {
   }, [centerTimeParts, centerUtcOffsetParts])
 
   useEffect(() => {
+    if (isOrbitTransitioningRef.current) {
+      return
+    }
+
     const previousSelectedId = lastSelectionForTimeCounterRef.current
     const selectionChanged = previousSelectedId !== null && selectedId !== previousSelectedId
     lastSelectionForTimeCounterRef.current = selectedId
@@ -1231,7 +1637,6 @@ export function useHomeClockModel(): HomeClockViewModel {
         setSky(preview)
         if (pendingSelectionTransitionRef.current) {
           pendingSelectionTransitionRef.current = false
-          setRingMotionToken((token) => token + 1)
           setGradientTransitionToken((token) => token + 1)
         }
         setRingError(null)
@@ -1262,7 +1667,6 @@ export function useHomeClockModel(): HomeClockViewModel {
           setSky((payload as SkyResponse).result)
           if (pendingSelectionTransitionRef.current) {
             pendingSelectionTransitionRef.current = false
-            setRingMotionToken((token) => token + 1)
             setGradientTransitionToken((token) => token + 1)
           }
           if (morphOnResolve && pendingSecondOrderMorphRef.current) {
@@ -1300,11 +1704,11 @@ export function useHomeClockModel(): HomeClockViewModel {
       if (gradientFadeRafRef.current !== null) {
         window.cancelAnimationFrame(gradientFadeRafRef.current)
       }
-      if (ringTransitionTimerRef.current !== null) {
-        window.clearTimeout(ringTransitionTimerRef.current)
-      }
       if (timeCounterRafRef.current !== null) {
         window.cancelAnimationFrame(timeCounterRafRef.current)
+      }
+      if (orbitTransitionRafRef.current !== null) {
+        window.cancelAnimationFrame(orbitTransitionRafRef.current)
       }
     }
   }, [])
@@ -1334,10 +1738,10 @@ export function useHomeClockModel(): HomeClockViewModel {
     isGradientTransitioning,
     previousWheelGradient,
     displayedWheelGradient,
-    wheelRotation,
+    wheelRotation: displayWheelRotation,
     orbitLabels,
     orbitLabelGroups,
-    orbitLabelLayout,
+    orbitLabelLayout: displayOrbitLabelLayout.length > 0 ? displayOrbitLabelLayout : orbitLabelLayout,
     ringDiameter,
     labelOrbitSizePx,
     setSelectedId,

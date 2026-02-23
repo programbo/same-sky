@@ -1,0 +1,44 @@
+- main [ref=e3]:
+  - region "Sky ring 24 hour view" [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e10]:
+        - paragraph [ref=e11]: your location
+        - paragraph [ref=e12]:
+          - generic [ref=e16]:
+            - generic [ref=e18]: "1"
+            - generic [ref=e20]: "8"
+          - generic [ref=e21]: ":"
+          - generic [ref=e25]:
+            - generic [ref=e27]: "3"
+            - generic [ref=e29]: "6"
+        - paragraph [ref=e30]: UTC offset
+        - paragraph [ref=e31]:
+          - generic [ref=e32]: UTC+
+          - generic [ref=e38]: "8"
+      - generic:
+        - generic: 🌙
+        - generic: "01"
+        - generic: "02"
+        - generic: "03"
+        - generic: "04"
+        - generic: "05"
+        - generic: "06"
+        - generic: "07"
+        - generic: "08"
+        - generic: "09"
+        - generic: "10"
+        - generic: "11"
+        - generic: ☀️
+        - generic: "13"
+        - generic: "14"
+        - generic: "15"
+        - generic: "16"
+        - generic: "17"
+        - generic: "18"
+        - generic: "19"
+        - generic: "20"
+        - generic: "21"
+        - generic: "22"
+        - generic: "23"
+      - listbox "Saved locations by 24 hour offset"
+      - paragraph [ref=e39]: No saved locations yet. The ring follows your current timezone.

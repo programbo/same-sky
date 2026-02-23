@@ -409,8 +409,6 @@
   border-radius: 999px;
   transform-origin: 0 50%;
   transition:
-    transform var(--rotation-transition-switch-duration) var(--rotation-transition-switch-easing),
-    width var(--rotation-transition-switch-duration) var(--rotation-transition-switch-easing),
     background-color 180ms ease,
     height 180ms ease;
   will-change: transform, width;
@@ -451,7 +449,7 @@
   background: transparent;
   pointer-events: auto;
   cursor: pointer;
-  transition-property: transform, width, height;
+  transition-property: width, height;
   transition-duration: var(--rotation-transition-switch-duration);
   transition-timing-function: var(--rotation-transition-switch-easing);
   will-change: transform, width, height;

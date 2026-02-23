@@ -54,7 +54,7 @@ export const centerCopy = tv({
 })
 
 export const orbitLabel = tv({
-  base: "group absolute left-0 top-0 m-0 border-0 bg-transparent p-0 text-left pointer-events-auto cursor-pointer transition-[transform,width,height] duration-[var(--home-rotation-switch-duration)] ease-[var(--home-rotation-switch-easing)] will-change-[transform,width,height] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-home-focus focus-visible:outline-offset-2",
+  base: "group absolute left-0 top-0 m-0 border-0 bg-transparent p-0 text-left pointer-events-auto cursor-pointer transition-[width,height] duration-[var(--home-rotation-switch-duration)] ease-[var(--home-rotation-switch-easing)] will-change-[transform,width,height] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-home-focus focus-visible:outline-offset-2",
   variants: {
     side: {
       left: "origin-right",
@@ -67,7 +67,7 @@ export const orbitLabel = tv({
 })
 
 export const labelSpoke = tv({
-  base: "absolute left-0 top-0 block rounded-full bg-[#bedcf3db] [height:1.6px] [transform-origin:0_50%] [box-shadow:0_0_0.7px_rgba(255,255,255,0.78),0_0_9px_rgba(120,183,229,0.46)] transition-[transform,width,background-color,height,box-shadow] duration-[var(--home-rotation-switch-duration)] ease-[var(--home-rotation-switch-easing)] will-change-[transform,width] motion-reduce:transition-none",
+  base: "absolute left-0 top-0 block rounded-full bg-[#bedcf3db] [height:1.6px] [transform-origin:0_50%] [box-shadow:0_0_0.7px_rgba(255,255,255,0.78),0_0_9px_rgba(120,183,229,0.46)] transition-[background-color,height,box-shadow] duration-180 ease-out will-change-[transform,width] motion-reduce:transition-none",
   variants: {
     selected: {
       true: "bg-[#f7d9ace8] [height:2.2px] [box-shadow:0_0_0.8px_rgba(255,247,231,0.95),0_0_12px_rgba(230,179,107,0.54)]",
