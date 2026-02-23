@@ -1,16 +1,15 @@
-* {
+.with-css-root,
+.with-css-root * {
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
+.with-css-root {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
 }
 
-body {
+.with-css-root {
   margin: 0;
   min-width: 320px;
   font-family: var(--font-body);
@@ -21,7 +20,7 @@ body {
     linear-gradient(150deg, var(--bg-0), var(--bg-1) 52%, var(--bg-2));
 }
 
-body::before {
+.with-css-root::before {
   content: "";
   position: fixed;
   inset: 0;
@@ -62,7 +61,7 @@ body::before {
   font-weight: 600;
 }
 
-h1 {
+.with-css-root h1 {
   margin: 0.2rem 0 0.2rem;
   font: 700 clamp(1.7rem, 4.4vw, 3rem) / 1.02 var(--font-display);
   letter-spacing: 0.01em;
@@ -89,7 +88,7 @@ h1 {
   gap: 0.7rem;
 }
 
-label {
+.with-css-root label {
   display: grid;
   gap: 0.36rem;
   font-size: 0.78rem;
@@ -108,14 +107,14 @@ label {
   max-width: 100%;
 }
 
-input,
-select,
-button {
+.with-css-root input,
+.with-css-root select,
+.with-css-root button {
   font: 500 0.93rem / 1.2 var(--font-body);
 }
 
-input,
-select {
+.with-css-root input,
+.with-css-root select {
   border: 1px solid #78b8e33f;
   background: #0b1b29c5;
   color: var(--text-main);
@@ -124,8 +123,8 @@ select {
   transition: border-color 140ms ease, background-color 140ms ease;
 }
 
-input:focus,
-select:focus {
+.with-css-root input:focus,
+.with-css-root select:focus {
   outline: none;
   border-color: #ffca71b5;
   background: #0f2233;
@@ -139,7 +138,7 @@ select:focus {
   align-items: center;
 }
 
-button {
+.with-css-root button {
   border: 1px solid #ffcf7a99;
   background: linear-gradient(135deg, #f8b048, #da8434);
   color: #182734;
@@ -151,17 +150,17 @@ button {
   transition: transform 150ms ease, filter 150ms ease;
 }
 
-button:hover {
+.with-css-root button:hover {
   transform: translateY(-1px);
   filter: brightness(1.08);
 }
 
-button:disabled {
+.with-css-root button:disabled {
   opacity: 0.72;
   cursor: progress;
 }
 
-button.ghost {
+.with-css-root button.ghost {
   border-color: #89cdff7a;
   background: linear-gradient(135deg, #244e6acc, #1d3a52cc);
   color: #ddf2ff;
@@ -473,7 +472,7 @@ button.ghost {
     align-items: stretch;
   }
 
-  button {
+  .with-css-root button {
     width: 100%;
   }
 
@@ -484,9 +483,9 @@ button.ghost {
 }
 
 @media (prefers-reduced-motion) {
-  *,
-  ::before,
-  ::after {
+  .with-css-root *,
+  .with-css-root ::before,
+  .with-css-root ::after {
     animation: none !important;
     transition: none !important;
   }

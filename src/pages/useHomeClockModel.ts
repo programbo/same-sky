@@ -183,11 +183,11 @@ const CLIENT_BASELINE_FACTORS: SharedSkySecondOrderFactors = {
 }
 
 const ZENITH_TOKENS: ConceptTokens = {
-  ringSizeDesktopVmin: 118,
-  ringSizeMobileVmin: 122,
+  ringSizeDesktopVmin: 114,
+  ringSizeMobileVmin: 120,
   ringSizeMaxPx: 1240,
-  bandWidthPct: 20,
-  haloSpreadPx: 190,
+  bandWidthPct: 22,
+  haloSpreadPx: 300,
 }
 
 function createClientBaselineEnvironment(timezone: string): SharedSkyEnvironment {
@@ -616,8 +616,8 @@ function sortByLabel(left: PersistedLocationApiResult, right: PersistedLocationA
 
 function groupedLabelHeight(memberCount: number, isMobile: boolean): number {
   const safeCount = Math.max(1, memberCount)
-  const base = isMobile ? 32 : 34
-  const perEntity = isMobile ? 36 : 38
+  const base = isMobile ? 36 : 38
+  const perEntity = isMobile ? 40 : 42
   return base + safeCount * perEntity
 }
 
@@ -656,20 +656,20 @@ const LABEL_EMOJI_FAMILY = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color E
 const BASE_REM_PX = 16
 
 function measureGroupedLabelWidth(group: OrbitLabelGroup, isMobile: boolean): number {
-  const entityNameFontPx = 0.94 * BASE_REM_PX
+  const entityNameFontPx = 0.98 * BASE_REM_PX
   const entityEmojiFontPx = 1.12 * BASE_REM_PX
-  const metaFontPx = (isMobile ? 0.72 : 0.78) * BASE_REM_PX
+  const metaFontPx = (isMobile ? 0.76 : 0.8) * BASE_REM_PX
 
-  const rowGapPx = 0.56 * BASE_REM_PX
-  const rowPadLeftPx = 0.56 * BASE_REM_PX
-  const rowPadRightPx = 0.56 * BASE_REM_PX
-  const iconColumnPx = 1.16 * BASE_REM_PX
-  const chipPadLeftPx = 0.18 * BASE_REM_PX
-  const chipPadRightPx = 0.18 * BASE_REM_PX
+  const rowGapPx = 0.6 * BASE_REM_PX
+  const rowPadLeftPx = 0.62 * BASE_REM_PX
+  const rowPadRightPx = 0.62 * BASE_REM_PX
+  const iconColumnPx = 1.2 * BASE_REM_PX
+  const chipPadLeftPx = 0.2 * BASE_REM_PX
+  const chipPadRightPx = 0.2 * BASE_REM_PX
   const metaPadLeftPx = rowPadLeftPx + iconColumnPx + rowGapPx
   const metaPadRightPx = rowPadRightPx
-  const metaOffsetGapPx = 0.26 * BASE_REM_PX
-  const safetyBufferPx = 16
+  const metaOffsetGapPx = 0.3 * BASE_REM_PX
+  const safetyBufferPx = 18
 
   const entityNameFont = `300 ${entityNameFontPx.toFixed(2)}px ${LABEL_FONT_FAMILY}`
   const metaFont = `700 ${metaFontPx.toFixed(2)}px ${LABEL_FONT_FAMILY}`

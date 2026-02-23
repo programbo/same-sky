@@ -1,6 +1,11 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
+@theme {
+  --font-display: "Fraunces", "Times New Roman", serif;
+  --font-body: "Work Sans", "Segoe UI", sans-serif;
+}
+
 :root {
   --bg-0: #071016;
   --bg-1: #0b1a23;

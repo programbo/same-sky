@@ -1,7 +1,16 @@
 import "./index.css";
-import { HomeClockPage } from "./pages/HomeClockPage";
+import { Suspense, lazy } from "react";
 import { HomeClockTailwindPage } from "./pages/HomeClockTailwindPage";
-import { RingRendererPage } from "./pages/RingRendererPage";
+
+const HomeClockPage = lazy(async () => {
+  const module = await import("./pages/HomeClockPage");
+  return { default: module.HomeClockPage };
+});
+
+const RingRendererPage = lazy(async () => {
+  const module = await import("./pages/RingRendererPage");
+  return { default: module.RingRendererPage };
+});
 
 function normalizedPath(pathname: string): string {
   if (!pathname) {
@@ -31,11 +40,19 @@ export function App() {
   const route = resolveAppRoute(window.location.pathname);
 
   if (route === "ring-renderer") {
-    return <RingRendererPage />;
+    return (
+      <Suspense fallback={null}>
+        <RingRendererPage />
+      </Suspense>
+    );
   }
 
   if (route === "home-css") {
-    return <HomeClockPage />;
+    return (
+      <Suspense fallback={null}>
+        <HomeClockPage />
+      </Suspense>
+    );
   }
 
   return <HomeClockTailwindPage />;

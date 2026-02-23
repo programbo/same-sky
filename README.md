@@ -24,6 +24,18 @@ To run tests:
 bun test
 ```
 
+To run visual regression tests (Playwright):
+
+```bash
+bun run test:visual
+```
+
+To update visual snapshots:
+
+```bash
+bun run test:visual:update
+```
+
 To run the interactive location persistence TUI:
 
 ```bash

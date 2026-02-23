@@ -15,7 +15,7 @@ export function HomeClockPage() {
   const model = useHomeClockModel()
 
   return (
-    <main className="home-shell home-shell--zenith">
+    <main className="with-css-root home-shell home-shell--zenith">
       <section className="home-ring-stage" aria-label="Sky ring 24 hour view">
         <div className="home-ring-frame" ref={model.ringFrameRef} style={model.conceptVars}>
           <div
