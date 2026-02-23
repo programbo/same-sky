@@ -1,7 +1,6 @@
 import type React from "react"
 import NumberFlow from "@number-flow/react"
-import "../home-clock.css"
-import "../with-css.css"
+import "../home-clock-tailwind.css"
 import {
   formatRelativeOffsetDirectionLabel,
   HOUR_MARKERS,
@@ -11,12 +10,12 @@ import {
   useHomeClockModel,
 } from "./useHomeClockModel"
 
-export function HomeClockPage() {
+export function HomeClockTailwindPage() {
   const model = useHomeClockModel()
 
   return (
-    <main className="home-shell home-shell--zenith">
-      <section className="home-ring-stage" aria-label="Sky ring 24 hour view">
+    <main className="home-shell home-shell--zenith relative isolate grid h-screen w-screen place-items-center overflow-hidden bg-slate-950 text-slate-50">
+      <section className="home-ring-stage grid h-full w-full place-items-center" aria-label="Sky ring 24 hour view">
         <div className="home-ring-frame" ref={model.ringFrameRef} style={model.conceptVars}>
           <div
             className={`home-sky-ring home-sky-ring-glow ${model.isRingTransitioning ? "is-switching" : ""}`}
@@ -56,7 +55,7 @@ export function HomeClockPage() {
             />
           </div>
 
-          <div className="home-center-readout">
+          <div className="home-center-readout rounded-full border border-sky-200/20 bg-slate-950/60 backdrop-blur-sm">
             <div key={model.centerCopyTransitionKey} className="home-center-copy">
               <p className="home-center-label">{model.selectedCopyLabel}</p>
               <p className="home-center-time">
@@ -239,4 +238,4 @@ export function HomeClockPage() {
   )
 }
 
-export default HomeClockPage
+export default HomeClockTailwindPage

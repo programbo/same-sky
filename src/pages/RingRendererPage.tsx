@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../index.css";
+import "../home-clock.css";
 
 type FactorKey = "altitude" | "turbidity" | "humidity" | "cloud_fraction" | "ozone_factor" | "light_pollution";
 

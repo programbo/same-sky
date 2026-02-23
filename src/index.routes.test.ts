@@ -207,6 +207,15 @@ describe("route handlers", () => {
     });
   });
 
+  test("serves index for /with-css path", async () => {
+    await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
+      const response = await fetch(new URL("/with-css", baseUrl));
+      expect(response.status).toBe(200);
+      const body = await response.text();
+      expect(body).toContain("<div id=\"root\"></div>");
+    });
+  });
+
   test("serves status route", async () => {
     await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
       const response = await fetch(new URL("/api/status", baseUrl));

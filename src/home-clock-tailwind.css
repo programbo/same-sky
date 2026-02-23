@@ -1,3 +1,17 @@
+@theme {
+  --color-home-bg: #020811;
+  --color-home-panel: #081325;
+  --color-home-text: #e5f0ff;
+  --color-home-muted: #9ec4de;
+  --color-home-focus: #ffd89d;
+}
+
+@layer base {
+  .home-shell {
+    color: var(--color-home-text);
+  }
+}
+
 :root {
   --home-focus: #ffd89d;
 }

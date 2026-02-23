@@ -20,8 +20,10 @@
     "xstate": "^5.28.0"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/bun": "latest"
+    "tailwind-merge": "^3.5.0",
+    "tailwind-variants": "^3.2.2"
   }
 }
