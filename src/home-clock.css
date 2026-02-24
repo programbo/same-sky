@@ -138,8 +138,7 @@
   pointer-events: none;
 }
 
-.home-sky-ring-glow .home-sky-ring-layer.is-current,
-.home-sky-ring-glow .home-sky-ring-layer.is-previous {
+.home-sky-ring-glow .home-sky-ring-layer.is-current {
   opacity: 0.84;
 }
 
@@ -232,14 +231,6 @@
 
 .home-sky-ring-layer.is-current {
   opacity: 0.9;
-}
-
-.home-sky-ring-layer.is-previous {
-  opacity: 0.9;
-}
-
-.home-sky-ring-layer.is-previous.is-fading-out {
-  opacity: 0;
 }
 
 .home-hour-layer {

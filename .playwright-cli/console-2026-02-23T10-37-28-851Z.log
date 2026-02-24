@@ -420,3 +420,67 @@ Visit https://react.dev/link/error-boundaries to learn more about error boundari
 [15784624ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:0
 [15797086ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:0
 [19073387ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:0
+[52346072ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:0
+[52384134ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:0
+[52394142ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:0
+[52394145ms] [ERROR] React has detected a change in the order of Hooks called by %s. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://react.dev/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+%s   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ HomeClockTailwindPage2 1. useState                   useState
+2. useState                   useState
+3. useState                   useState
+4. useState                   useState
+5. useState                   useState
+6. useState                   useState
+7. useState                   useState
+8. useState                   useState
+9. useState                   useState
+10. useState                  useState
+11. useState                  useState
+12. useState                  useState
+13. useState                  useState
+14. useState                  useRef
+ @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:23
+[52394149ms] Error: Should have a queue. You are likely calling Hooks conditionally, which is not allowed. (https://react.dev/link/invalid-hook-call)
+    at updateReducerImpl (http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:13105:17)
+    at updateReducer (http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:13100:16)
+    at Object.useState (http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:22825:20)
+    at exports.useState (http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:1076:36)
+    at useIsMobile (blob:http://127.0.0.1:3000/01b6cd0d-affe-4f12-9b03-1e4a8889279a:632:52)
+    at Object.useHomeClockModel (blob:http://127.0.0.1:3000/01b6cd0d-affe-4f12-9b03-1e4a8889279a:753:24)
+    at HomeClockTailwindPage2 (http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:5450:47)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:22364:20)
+    at renderWithHooks (http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:12891:24)
+    at updateFunctionComponent (http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:14315:21)
+[52394148ms] [WARNING] %s
+
+%s
+ An error occurred in the <HomeClockTailwindPage2> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:13963
+[52407878ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-00000000e69cf112.js:0
+[52407963ms] ReferenceError: isGradientTransitioning is not defined
+    at Object.useHomeClockModel (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:3753:9)
+    at HomeClockTailwindPage2 (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:5576:47)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:22490:20)
+    at renderWithHooks (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:13017:24)
+    at updateFunctionComponent (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:14441:21)
+    at beginWork (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:15070:20)
+    at runWithFiberInDEV (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:9153:72)
+    at performUnitOfWork (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:17651:98)
+    at workLoopSync (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:17537:11)
+    at renderRootSync (http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:17520:15)
+[52407963ms] [WARNING] %s
+
+%s
+ An error occurred in the <HomeClockTailwindPage2> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:14089
+[52414415ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-000000006db87ea9.js:0
+[52431985ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-000000002f1a44d5.js:0
+[52436617ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-000000002f1a44d5.js:0
+[52444820ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-000000002f1a44d5.js:0
+[52451189ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-000000002f1a44d5.js:0
+[52456672ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-000000002f1a44d5.js:0
+[52493240ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-000000002f1a44d5.js:0
+[52502565ms] [WARNING] @import rules are not allowed here. See https://github.com/WICG/construct-stylesheets/issues/119#issuecomment-588352418. @ http://127.0.0.1:3000/_bun/client/index-000000002f1a44d5.js:0

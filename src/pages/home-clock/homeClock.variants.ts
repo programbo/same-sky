@@ -16,16 +16,11 @@ export const skyRing = tv({
 })
 
 export const skyRingLayer = tv({
-  base: "absolute inset-0 z-[1] rounded-full transition-opacity duration-[var(--home-rotation-switch-duration)] ease-[var(--home-rotation-switch-easing)] motion-reduce:transition-none",
+  base: "absolute inset-0 z-[1] rounded-full",
   variants: {
     tone: {
       current: "opacity-90",
-      previous: "opacity-90",
       glowCurrent: "opacity-[0.82]",
-      glowPrevious: "opacity-[0.82]",
-    },
-    fadingOut: {
-      true: "opacity-0",
     },
   },
 })

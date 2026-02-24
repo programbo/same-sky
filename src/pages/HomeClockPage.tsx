@@ -23,13 +23,6 @@ export function HomeClockPage() {
             style={{ transform: `rotate(${model.wheelRotation}deg) scale(1.03)` }}
             aria-hidden="true"
           >
-            {model.previousWheelGradient ? (
-              <div
-                className={`home-sky-ring-layer is-previous ${model.isGradientTransitioning ? "is-fading-out" : ""}`}
-                style={{ backgroundImage: model.previousWheelGradient }}
-                aria-hidden="true"
-              />
-            ) : null}
             <div
               className="home-sky-ring-layer is-current"
               style={{ backgroundImage: model.displayedWheelGradient }}
@@ -42,13 +35,6 @@ export function HomeClockPage() {
             style={{ transform: `rotate(${model.wheelRotation}deg)` }}
           >
             <div className="home-sky-ring-stars" aria-hidden="true" />
-            {model.previousWheelGradient ? (
-              <div
-                className={`home-sky-ring-layer is-previous ${model.isGradientTransitioning ? "is-fading-out" : ""}`}
-                style={{ backgroundImage: model.previousWheelGradient }}
-                aria-hidden="true"
-              />
-            ) : null}
             <div
               className="home-sky-ring-layer is-current"
               style={{ backgroundImage: model.displayedWheelGradient }}

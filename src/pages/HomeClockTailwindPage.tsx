@@ -14,8 +14,6 @@ export function HomeClockTailwindPage() {
       <SkyRingLayers
         wheelRotation={model.wheelRotation}
         isRingTransitioning={model.isRingTransitioning}
-        isGradientTransitioning={model.isGradientTransitioning}
-        previousWheelGradient={model.previousWheelGradient}
         displayedWheelGradient={model.displayedWheelGradient}
       />
 

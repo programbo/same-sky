@@ -48,6 +48,12 @@ interface Sky24hResult {
   stops: SkyStop[]
 }
 
+interface ConicGradientStop {
+  minute: number
+  colorHex: string
+  alpha: number
+}
+
 interface SkyResponse {
   result: Sky24hResult
 }
@@ -175,8 +181,6 @@ export interface HomeClockViewModel {
   shouldAnimateUtcMinutes: boolean
   ringError: string | null
   isRingTransitioning: boolean
-  isGradientTransitioning: boolean
-  previousWheelGradient: string | null
   displayedWheelGradient: string
   wheelRotation: number
   orbitLabels: OrbitLabel[]
@@ -200,6 +204,11 @@ const NIGHT_SKY_STOP_NAMES = new Set([
   "late_night",
   "local_midnight_end",
 ])
+const DEFAULT_CONIC_GRADIENT_STOPS: ConicGradientStop[] = [
+  { minute: 0, colorHex: "#081521", alpha: 1 },
+  { minute: 720, colorHex: "#102f42", alpha: 1 },
+  { minute: 1440, colorHex: "#081521", alpha: 1 },
+]
 export const NUMBER_FLOW_PLUGINS = [continuous]
 const CLIENT_BASELINE_FACTORS: SharedSkySecondOrderFactors = {
   altitude: 0,
@@ -516,7 +525,7 @@ function mixHexColors(leftHex: string, rightHex: string, ratio: number): string 
   return `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`
 }
 
-function hexToRgba(hex: string, alpha: number): string {
+function colorHexWithAlpha(hex: string, alpha: number): string {
   const rgb = hexToRgb(hex)
   if (!rgb) {
     return hex
@@ -769,43 +778,184 @@ function shortestOffsetDeltaMinutes(fromOffsetMinutes: number, toOffsetMinutes: 
   return ((((rawDelta + 720) % 1440) + 1440) % 1440) - 720
 }
 
-function buildConicGradient(stops: SkyStop[]): string {
-  if (stops.length === 0) {
-    return "conic-gradient(from 0deg, #081521, #102f42, #081521)"
-  }
+function cloneConicGradientStops(stops: ConicGradientStop[]): ConicGradientStop[] {
+  return stops.map((stop) => ({ ...stop }))
+}
 
-  const points = stops
-    .filter((stop) => stop.minutesOfDay >= 0 && stop.minutesOfDay <= 1440)
-    .map((stop) => {
-      const baseColor = stop.colorHex || "#081521"
-      return {
-        minute: Math.max(0, Math.min(1440, stop.minutesOfDay)),
-        colorHex: NIGHT_SKY_STOP_NAMES.has(stop.name) ? hexToRgba(baseColor, 0.46) : baseColor,
-      }
-    })
+function normalizeConicGradientStops(stops: ConicGradientStop[]): ConicGradientStop[] {
+  const normalized = stops
+    .filter((stop) => Number.isFinite(stop.minute))
+    .map((stop) => ({
+      minute: clamp(stop.minute, 0, 1440),
+      colorHex: stop.colorHex || "#081521",
+      alpha: clamp(stop.alpha, 0, 1),
+    }))
     .sort((left, right) => left.minute - right.minute)
 
-  if (points.length === 0) {
-    return "conic-gradient(from 0deg, #081521, #102f42, #081521)"
+  if (normalized.length === 0) {
+    return cloneConicGradientStops(DEFAULT_CONIC_GRADIENT_STOPS)
   }
 
-  if (points[0]?.minute !== 0) {
-    points.unshift({
+  if (normalized[0]?.minute !== 0) {
+    normalized.unshift({
       minute: 0,
-      colorHex: points[0]?.colorHex ?? "#081521",
+      colorHex: normalized[0]?.colorHex ?? "#081521",
+      alpha: normalized[0]?.alpha ?? 1,
     })
   }
 
-  if (points[points.length - 1]?.minute !== 1440) {
-    points.push({
+  if (normalized[normalized.length - 1]?.minute !== 1440) {
+    normalized.push({
       minute: 1440,
-      colorHex: points[0]?.colorHex ?? "#081521",
+      colorHex: normalized[0]?.colorHex ?? "#081521",
+      alpha: normalized[0]?.alpha ?? 1,
     })
   }
 
-  const segments = points.map((point) => {
-    const pct = Number(((point.minute / 1440) * 100).toFixed(3))
-    return `${point.colorHex} ${pct}%`
+  return normalized
+}
+
+function buildConicGradientStops(stops: SkyStop[]): ConicGradientStop[] {
+  if (stops.length === 0) {
+    return cloneConicGradientStops(DEFAULT_CONIC_GRADIENT_STOPS)
+  }
+
+  const mapped = stops
+    .filter((stop) => stop.minutesOfDay >= 0 && stop.minutesOfDay <= 1440)
+    .map((stop) => ({
+      minute: stop.minutesOfDay,
+      colorHex: stop.colorHex || "#081521",
+      alpha: NIGHT_SKY_STOP_NAMES.has(stop.name) ? 0.46 : 1,
+    }))
+
+  return normalizeConicGradientStops(mapped)
+}
+
+function areConicGradientStopsEqual(left: ConicGradientStop[], right: ConicGradientStop[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftStop = left[index]
+    const rightStop = right[index]
+    if (!leftStop || !rightStop) {
+      return false
+    }
+    if (Math.abs(leftStop.minute - rightStop.minute) > 0.001) {
+      return false
+    }
+    if (leftStop.colorHex.toLowerCase() !== rightStop.colorHex.toLowerCase()) {
+      return false
+    }
+    if (Math.abs(leftStop.alpha - rightStop.alpha) > 0.001) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function sampleNormalizedConicGradientStopAtMinute(
+  normalizedStops: ConicGradientStop[],
+  minuteOfDay: number,
+): ConicGradientStop {
+  const minute = normalizeMinutesOfDay(minuteOfDay)
+  if (normalizedStops.length === 1) {
+    return {
+      minute,
+      colorHex: normalizedStops[0]!.colorHex,
+      alpha: normalizedStops[0]!.alpha,
+    }
+  }
+
+  const nextIndex = normalizedStops.findIndex((stop) => stop.minute >= minute)
+  if (nextIndex === -1) {
+    const previous = normalizedStops[normalizedStops.length - 1]!
+    const next = { ...normalizedStops[0]!, minute: normalizedStops[0]!.minute + 1440 }
+    const span = next.minute - previous.minute
+    if (span <= 0) {
+      return {
+        minute,
+        colorHex: next.colorHex,
+        alpha: next.alpha,
+      }
+    }
+    const ratio = (minute - previous.minute) / span
+    return {
+      minute,
+      colorHex: mixHexColors(previous.colorHex, next.colorHex, ratio),
+      alpha: lerpNumber(previous.alpha, next.alpha, ratio),
+    }
+  }
+
+  const next = normalizedStops[nextIndex]!
+  const previous =
+    nextIndex === 0
+      ? { ...normalizedStops[normalizedStops.length - 1]!, minute: normalizedStops[normalizedStops.length - 1]!.minute - 1440 }
+      : normalizedStops[nextIndex - 1]!
+
+  const span = next.minute - previous.minute
+  if (span <= 0) {
+    return {
+      minute,
+      colorHex: next.colorHex,
+      alpha: next.alpha,
+    }
+  }
+
+  const ratio = (minute - previous.minute) / span
+  return {
+    minute,
+    colorHex: mixHexColors(previous.colorHex, next.colorHex, ratio),
+    alpha: lerpNumber(previous.alpha, next.alpha, ratio),
+  }
+}
+
+function interpolateConicGradientStops(
+  fromStops: ConicGradientStop[],
+  toStops: ConicGradientStop[],
+  progress: number,
+): ConicGradientStop[] {
+  const t = clamp(progress, 0, 1)
+  if (t <= 0) {
+    return normalizeConicGradientStops(fromStops)
+  }
+  if (t >= 1) {
+    return normalizeConicGradientStops(toStops)
+  }
+
+  const fromNormalized = normalizeConicGradientStops(fromStops)
+  const toNormalized = normalizeConicGradientStops(toStops)
+  const minuteByKey = new Map<string, number>()
+  for (const minute of [0, 1440]) {
+    minuteByKey.set(minute.toFixed(3), minute)
+  }
+  for (const stop of fromNormalized) {
+    minuteByKey.set(stop.minute.toFixed(3), stop.minute)
+  }
+  for (const stop of toNormalized) {
+    minuteByKey.set(stop.minute.toFixed(3), stop.minute)
+  }
+
+  const minutes = [...minuteByKey.values()].sort((left, right) => left - right)
+  return minutes.map((minute) => {
+    const fromSample = sampleNormalizedConicGradientStopAtMinute(fromNormalized, minute)
+    const toSample = sampleNormalizedConicGradientStopAtMinute(toNormalized, minute)
+    return {
+      minute,
+      colorHex: mixHexColors(fromSample.colorHex, toSample.colorHex, t),
+      alpha: lerpNumber(fromSample.alpha, toSample.alpha, t),
+    }
+  })
+}
+
+function buildConicGradient(stops: ConicGradientStop[]): string {
+  const normalizedStops = normalizeConicGradientStops(stops)
+  const segments = normalizedStops.map((stop) => {
+    const pct = Number(((stop.minute / 1440) * 100).toFixed(3))
+    const color = stop.alpha < 0.999 ? colorHexWithAlpha(stop.colorHex, stop.alpha) : stop.colorHex
+    return `${color} ${pct}%`
   })
 
   return `conic-gradient(from 0deg, ${segments.join(", ")})`
@@ -969,9 +1119,9 @@ export function useHomeClockModel(): HomeClockViewModel {
   const [clockNowMs, setClockNowMs] = useState<number>(() => Date.now())
   const [ringError, setRingError] = useState<string | null>(null)
   const [ringDiameter, setRingDiameter] = useState<number>(0)
-  const [displayedWheelGradient, setDisplayedWheelGradient] = useState<string>(() => buildConicGradient([]))
-  const [previousWheelGradient, setPreviousWheelGradient] = useState<string | null>(null)
-  const [isGradientTransitioning, setIsGradientTransitioning] = useState<boolean>(false)
+  const [displayedWheelGradient, setDisplayedWheelGradient] = useState<string>(() =>
+    buildConicGradient(DEFAULT_CONIC_GRADIENT_STOPS),
+  )
   const [gradientTransitionToken, setGradientTransitionToken] = useState<number>(0)
   const [isRingTransitioning, setIsRingTransitioning] = useState<boolean>(false)
   const [wheelBaseRotationDeg, setWheelBaseRotationDeg] = useState<number>(0)
@@ -984,8 +1134,8 @@ export function useHomeClockModel(): HomeClockViewModel {
   const pendingSelectionTransitionRef = useRef<boolean>(false)
   const pendingSecondOrderMorphRef = useRef<boolean>(false)
   const lastAnimatedGradientTokenRef = useRef<number>(0)
-  const gradientFadeTimerRef = useRef<number | null>(null)
-  const gradientFadeRafRef = useRef<number | null>(null)
+  const displayedWheelGradientStopsRef = useRef<ConicGradientStop[]>(cloneConicGradientStops(DEFAULT_CONIC_GRADIENT_STOPS))
+  const gradientMorphRafRef = useRef<number | null>(null)
   const wheelBaseRotationRef = useRef<number | null>(null)
   const ringRotationDirectionRef = useRef<number>(0)
   const selectedOrbitAnchorRef = useRef<number | null>(null)
@@ -1057,7 +1207,7 @@ export function useHomeClockModel(): HomeClockViewModel {
   const timeCounterRafRef = useRef<number | null>(null)
   const isTimeCounterAnimatingRef = useRef<boolean>(false)
 
-  const wheelGradient = useMemo(() => buildConicGradient(sky?.stops ?? []), [sky])
+  const wheelGradientStops = useMemo(() => buildConicGradientStops(sky?.stops ?? []), [sky])
 
   useLayoutEffect(() => {
     if (!sky) {
@@ -1406,45 +1556,47 @@ export function useHomeClockModel(): HomeClockViewModel {
   }, [selectedId])
 
   useEffect(() => {
-    if (wheelGradient === displayedWheelGradient) {
+    const currentStops = displayedWheelGradientStopsRef.current
+    if (areConicGradientStopsEqual(currentStops, wheelGradientStops)) {
       return
+    }
+
+    if (gradientMorphRafRef.current !== null) {
+      window.cancelAnimationFrame(gradientMorphRafRef.current)
+      gradientMorphRafRef.current = null
     }
 
     const shouldAnimate =
-      gradientTransitionToken > lastAnimatedGradientTokenRef.current && displayedWheelGradient.length > 0
+      gradientTransitionToken > lastAnimatedGradientTokenRef.current && currentStops.length > 0 && !prefersReducedMotion()
     if (!shouldAnimate) {
-      setDisplayedWheelGradient(wheelGradient)
-      setPreviousWheelGradient(null)
-      setIsGradientTransitioning(false)
+      const normalizedTarget = normalizeConicGradientStops(wheelGradientStops)
+      displayedWheelGradientStopsRef.current = cloneConicGradientStops(normalizedTarget)
+      setDisplayedWheelGradient(buildConicGradient(normalizedTarget))
       return
     }
 
-    if (gradientFadeTimerRef.current !== null) {
-      window.clearTimeout(gradientFadeTimerRef.current)
-      gradientFadeTimerRef.current = null
-    }
-    if (gradientFadeRafRef.current !== null) {
-      window.cancelAnimationFrame(gradientFadeRafRef.current)
-      gradientFadeRafRef.current = null
-    }
-
-    setPreviousWheelGradient(displayedWheelGradient)
-    setDisplayedWheelGradient(wheelGradient)
-    setIsGradientTransitioning(false)
-
-    gradientFadeRafRef.current = window.requestAnimationFrame(() => {
-      setIsGradientTransitioning(true)
-      gradientFadeRafRef.current = null
-    })
-
-    gradientFadeTimerRef.current = window.setTimeout(() => {
-      setPreviousWheelGradient(null)
-      setIsGradientTransitioning(false)
-      gradientFadeTimerRef.current = null
-    }, SELECTION_TRANSITION_MS)
-
+    const fromStops = cloneConicGradientStops(currentStops)
+    const toStops = cloneConicGradientStops(wheelGradientStops)
+    const startedAtMs = performance.now()
     lastAnimatedGradientTokenRef.current = gradientTransitionToken
-  }, [wheelGradient, displayedWheelGradient, gradientTransitionToken])
+
+    const tick = (frameNowMs: number) => {
+      const progress = clamp((frameNowMs - startedAtMs) / SELECTION_TRANSITION_MS, 0, 1)
+      const easedProgress = easeSelectionTransition(progress)
+      const frameStops = interpolateConicGradientStops(fromStops, toStops, easedProgress)
+      displayedWheelGradientStopsRef.current = frameStops
+      setDisplayedWheelGradient(buildConicGradient(frameStops))
+
+      if (progress >= 1) {
+        gradientMorphRafRef.current = null
+        return
+      }
+
+      gradientMorphRafRef.current = window.requestAnimationFrame(tick)
+    }
+
+    gradientMorphRafRef.current = window.requestAnimationFrame(tick)
+  }, [wheelGradientStops, gradientTransitionToken])
 
   const loadSavedLocations = useCallback(async () => {
     try {
@@ -1698,11 +1850,8 @@ export function useHomeClockModel(): HomeClockViewModel {
 
   useEffect(() => {
     return () => {
-      if (gradientFadeTimerRef.current !== null) {
-        window.clearTimeout(gradientFadeTimerRef.current)
-      }
-      if (gradientFadeRafRef.current !== null) {
-        window.cancelAnimationFrame(gradientFadeRafRef.current)
+      if (gradientMorphRafRef.current !== null) {
+        window.cancelAnimationFrame(gradientMorphRafRef.current)
       }
       if (timeCounterRafRef.current !== null) {
         window.cancelAnimationFrame(timeCounterRafRef.current)
@@ -1735,8 +1884,6 @@ export function useHomeClockModel(): HomeClockViewModel {
     shouldAnimateUtcMinutes,
     ringError,
     isRingTransitioning,
-    isGradientTransitioning,
-    previousWheelGradient,
     displayedWheelGradient,
     wheelRotation: displayWheelRotation,
     orbitLabels,
