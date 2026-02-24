@@ -12,7 +12,6 @@ export default defineConfig({
   },
   use: {
     baseURL,
-    reducedMotion: "reduce",
     timezoneId: "UTC",
     colorScheme: "dark",
   },

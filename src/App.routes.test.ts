@@ -6,17 +6,9 @@ describe("resolveAppRoute", () => {
     expect(resolveAppRoute("/")).toBe("home-tailwind")
   })
 
-  test("routes with-css path", () => {
-    expect(resolveAppRoute("/with-css")).toBe("home-css")
-    expect(resolveAppRoute("/with-css/")).toBe("home-css")
-  })
-
-  test("routes ring-renderer path", () => {
-    expect(resolveAppRoute("/ring-renderer")).toBe("ring-renderer")
-    expect(resolveAppRoute("/ring-renderer/")).toBe("ring-renderer")
-  })
-
-  test("falls back unknown paths to tailwind page", () => {
+  test("always routes to tailwind page", () => {
+    expect(resolveAppRoute("/legacy-home")).toBe("home-tailwind")
+    expect(resolveAppRoute("/legacy-preview")).toBe("home-tailwind")
     expect(resolveAppRoute("/unknown")).toBe("home-tailwind")
     expect(resolveAppRoute("")).toBe("home-tailwind")
   })

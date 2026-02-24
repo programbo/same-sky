@@ -1,4 +1,5 @@
 import type React from "react"
+import { SkySatelliteCanvas } from "./SkySatelliteCanvas"
 
 interface HomeClockShellProps {
   ringFrameRef: React.RefObject<HTMLDivElement | null>
@@ -9,6 +10,7 @@ interface HomeClockShellProps {
 export function HomeClockShell({ ringFrameRef, conceptVars, children }: HomeClockShellProps) {
   return (
     <main className="relative isolate grid h-screen w-screen place-items-center overflow-hidden bg-home-bg text-home-text animate-home-fade-in fx-home-shell">
+      <SkySatelliteCanvas />
       <section className="relative z-[2] size-full overflow-hidden" aria-label="Sky ring 24 hour view">
         <div
           ref={ringFrameRef}

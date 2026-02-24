@@ -3,14 +3,10 @@ import { cn, tv } from "tailwind-variants"
 export { cn }
 
 export const skyRing = tv({
-  base: "absolute inset-0 rounded-full transition-transform duration-[var(--home-rotation-duration)] ease-[var(--home-rotation-easing)] will-change-transform motion-reduce:transition-none fx-home-sky-mask",
+  base: "absolute inset-0 z-[2] rounded-full transition-transform duration-[var(--home-rotation-duration)] ease-[var(--home-rotation-easing)] will-change-transform motion-reduce:transition-none fx-home-sky-mask",
   variants: {
     switching: {
       true: "duration-[var(--home-rotation-switch-duration)] ease-[var(--home-rotation-switch-easing)]",
-    },
-    glow: {
-      true: "z-[1] pointer-events-none opacity-[0.88] shadow-none fx-home-sky-glow",
-      false: "z-[2]",
     },
   },
 })
@@ -20,7 +16,6 @@ export const skyRingLayer = tv({
   variants: {
     tone: {
       current: "opacity-90",
-      glowCurrent: "opacity-[0.82]",
     },
   },
 })
@@ -62,10 +57,10 @@ export const orbitLabel = tv({
 })
 
 export const labelSpoke = tv({
-  base: "absolute left-0 top-0 block rounded-full bg-[#bedcf3db] [height:1.6px] [transform-origin:0_50%] [box-shadow:0_0_0.7px_rgba(255,255,255,0.78),0_0_9px_rgba(120,183,229,0.46)] transition-[background-color,height,box-shadow] duration-180 ease-out will-change-[transform,width] motion-reduce:transition-none",
+  base: "absolute left-0 top-0 block rounded-full bg-[#bedcf3db] [height:1.6px] [transform-origin:0_50%] [box-shadow:0_0_0.7px_rgba(255,255,255,0.78),0_0_9px_rgba(120,183,229,0.46)] transition-[background-color,height,box-shadow] duration-180 ease-out will-change-[transform,width] motion-reduce:transition-none after:pointer-events-none after:absolute after:left-0 after:top-1/2 after:size-[6px] after:-translate-x-1/2 after:-translate-y-1/2 after:rounded-full after:bg-[#bedcf3f0] after:[box-shadow:0_0_0.7px_rgba(255,255,255,0.86),0_0_12px_rgba(120,183,229,0.5)] after:transition-[background-color,box-shadow,transform] after:duration-180 after:ease-out after:content-['']",
   variants: {
     selected: {
-      true: "bg-[#f7d9ace8] [height:2.2px] [box-shadow:0_0_0.8px_rgba(255,247,231,0.95),0_0_12px_rgba(230,179,107,0.54)]",
+      true: "bg-[#f7d9ace8] [height:2.2px] [box-shadow:0_0_0.8px_rgba(255,247,231,0.95),0_0_12px_rgba(230,179,107,0.54)] after:bg-[#f9ddb4] after:scale-[1.08] after:[box-shadow:0_0_0.9px_rgba(255,247,231,0.98),0_0_13px_rgba(230,179,107,0.58)]",
     },
   },
 })
@@ -83,10 +78,10 @@ export const orbitChip = tv({
 })
 
 export const orbitEntityRow = tv({
-  base: "grid min-h-10 w-full cursor-pointer grid-cols-[var(--orbit-icon-col)_minmax(0,1fr)] items-center gap-x-[var(--orbit-row-gap)] rounded-[10px] border border-transparent bg-transparent px-[var(--orbit-row-pad-x)] py-[0.34rem] text-left text-white transition-[background-color,border-color,box-shadow] duration-150 ease-out hover:border-[#ffd89d99] hover:bg-[#ffd89d1f] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)] focus-visible:outline-2 focus-visible:outline-home-focus focus-visible:outline-offset-1",
+  base: "relative isolate grid min-h-10 w-full cursor-pointer grid-cols-[var(--orbit-icon-col)_minmax(0,1fr)] items-center gap-x-[var(--orbit-row-gap)] overflow-hidden rounded-[10px] border border-transparent bg-transparent px-[var(--orbit-row-pad-x)] py-[0.34rem] text-left text-white transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-home-focus focus-visible:outline-offset-1",
   variants: {
     selected: {
-      true: "border-[#ffd89d99] bg-[#ffd89d1f] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]",
+      true: "",
     },
   },
 })

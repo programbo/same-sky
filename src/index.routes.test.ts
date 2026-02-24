@@ -207,9 +207,9 @@ describe("route handlers", () => {
     });
   });
 
-  test("serves index for /with-css path", async () => {
+  test("serves index for unmatched frontend paths", async () => {
     await withServer(createDependencies(), createMemoryLocationStore(), async baseUrl => {
-      const response = await fetch(new URL("/with-css", baseUrl));
+      const response = await fetch(new URL("/anything", baseUrl));
       expect(response.status).toBe(200);
       const body = await response.text();
       expect(body).toContain("<div id=\"root\"></div>");

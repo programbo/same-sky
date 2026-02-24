@@ -1,60 +1,15 @@
 import "./index.css";
-import { Suspense, lazy } from "react";
 import { HomeClockTailwindPage } from "./pages/HomeClockTailwindPage";
 
-const HomeClockPage = lazy(async () => {
-  const module = await import("./pages/HomeClockPage");
-  return { default: module.HomeClockPage };
-});
-
-const RingRendererPage = lazy(async () => {
-  const module = await import("./pages/RingRendererPage");
-  return { default: module.RingRendererPage };
-});
-
-function normalizedPath(pathname: string): string {
-  if (!pathname) {
-    return "/";
-  }
-
-  return pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
-}
-
-export type AppRoute = "home-tailwind" | "home-css" | "ring-renderer";
+export type AppRoute = "home-tailwind";
 
 export function resolveAppRoute(pathname: string): AppRoute {
-  const path = normalizedPath(pathname);
-
-  if (path === "/with-css") {
-    return "home-css";
-  }
-
-  if (path === "/ring-renderer") {
-    return "ring-renderer";
-  }
-
+  void pathname;
   return "home-tailwind";
 }
 
 export function App() {
-  const route = resolveAppRoute(window.location.pathname);
-
-  if (route === "ring-renderer") {
-    return (
-      <Suspense fallback={null}>
-        <RingRendererPage />
-      </Suspense>
-    );
-  }
-
-  if (route === "home-css") {
-    return (
-      <Suspense fallback={null}>
-        <HomeClockPage />
-      </Suspense>
-    );
-  }
-
+  resolveAppRoute(window.location.pathname);
   return <HomeClockTailwindPage />;
 }
 

@@ -112,15 +112,15 @@ test.beforeEach(async ({ page }) => {
     const NativeDate = Date
 
     class FixedDate extends NativeDate {
-      constructor(...args: ConstructorParameters<typeof Date>) {
+      constructor(...args: unknown[]) {
         if (args.length === 0) {
           super(nowMs)
           return
         }
-        super(...args)
+        super(...(args as ConstructorParameters<typeof Date>))
       }
 
-      static now() {
+      static override now() {
         return nowMs
       }
     }

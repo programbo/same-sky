@@ -30,7 +30,11 @@ export function HomeClockTailwindPage() {
         ringError={model.ringError}
       />
 
-      <HourTickLayer wheelRotation={model.wheelRotation} isRingTransitioning={model.isRingTransitioning} />
+      <HourTickLayer
+        wheelRotation={model.wheelRotation}
+        isRingTransitioning={model.isRingTransitioning}
+        areHourTicksVisible={model.areHourTicksVisible}
+      />
 
       <OrbitLabelSystem
         orbitLabelLayout={model.orbitLabelLayout}

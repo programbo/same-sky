@@ -129,7 +129,7 @@ function branchPath(anchorX: number, anchorY: number, edgeX: number, edgeY: numb
 }
 
 function labelCornerRadiusPx(isMobile: boolean): number {
-  return isMobile ? 14 : 16
+  return isMobile ? 13 : 16
 }
 
 function hourRingOuterRadius(ringDiameter: number, isMobile: boolean): number {
@@ -354,14 +354,14 @@ function compareBeamState(left: BeamState, right: BeamState): number {
   if (left.ringOverlap !== right.ringOverlap) {
     return left.ringOverlap - right.ringOverlap
   }
+  if (left.overflow !== right.overflow) {
+    return left.overflow - right.overflow
+  }
   if (left.hardOverlapCount !== right.hardOverlapCount) {
     return left.hardOverlapCount - right.hardOverlapCount
   }
   if (left.softOverlapCount !== right.softOverlapCount) {
     return left.softOverlapCount - right.softOverlapCount
-  }
-  if (left.overflow !== right.overflow) {
-    return left.overflow - right.overflow
   }
   if (left.hardOverlapArea !== right.hardOverlapArea) {
     return left.hardOverlapArea - right.hardOverlapArea
@@ -381,15 +381,17 @@ export function computeOrbitLabelLayout(
   }
 
   const minGap = 8
-  const maxLane = config.isMobile ? 14 : 18
-  const radialLaneStep = config.isMobile ? 22 : 26
+  const maxLane = config.isMobile ? 18 : 22
+  const radialLaneStep = config.isMobile ? 26 : 30
   const spokeGap = config.isMobile ? 10 : 12
-  const framePadding = config.isMobile ? 8 : 10
+  const selectedSpokeGap = config.isMobile ? 8 : 10
+  const framePadding = 0
+  const constraintEpsilon = 0.05
 
   const centerX = config.frameWidth / 2
   const centerY = config.frameHeight / 2
   const anchorRadius = hourRingOuterRadius(config.ringDiameter, config.isMobile)
-  const ringClearancePx = config.isMobile ? 4 : 6
+  const ringClearancePx = config.isMobile ? 7 : 9
   const forbiddenRingRadius = anchorRadius + ringClearancePx
 
   const nodes: WorkingNode[] = inputs
@@ -405,7 +407,9 @@ export function computeOrbitLabelLayout(
       const height = Math.round(input.height ?? fallbackHeight)
       const centerProjection = projectedHalfDepth(width, height, normalX, normalY)
       const insetProjection = cornerInset(width, height, config.isMobile)
-      const baseDistance = input.isSelected ? spokeGap + centerProjection : spokeGap + insetProjection
+      const baseDistance = input.isSelected
+        ? selectedSpokeGap + centerProjection
+        : spokeGap + insetProjection
 
       return {
         id: input.id,
@@ -509,8 +513,17 @@ export function computeOrbitLabelLayout(
       }
     }
 
-    localCandidates.sort(compareCandidate)
-    const boundedCandidates = localCandidates.slice(0, maxCandidatesPerNode)
+    const constrainedCandidates = localCandidates.filter((candidate) => {
+      return (
+        candidate.selectedTopViolation <= constraintEpsilon &&
+        candidate.ringOverlap <= constraintEpsilon &&
+        candidate.overflow <= constraintEpsilon
+      )
+    })
+    const candidatePool = constrainedCandidates.length > 0 ? constrainedCandidates : localCandidates
+
+    candidatePool.sort(compareCandidate)
+    const boundedCandidates = candidatePool.slice(0, maxCandidatesPerNode)
     const nextBeam: BeamState[] = []
 
     for (const state of beam) {

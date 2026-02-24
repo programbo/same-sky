@@ -34,3 +34,5 @@ test-results
 
 # Finder (MacOS) folder config
 .DS_Store
+
+.playwright-cli

@@ -1,6 +1,6 @@
 import NumberFlow from "@number-flow/react"
 import { HOUR_TREND, MINUTE_TREND, NUMBER_FLOW_PLUGINS } from "../useHomeClockModel"
-import { centerCopy } from "./homeClock.variants"
+import { cn, centerCopy } from "./homeClock.variants"
 
 interface CenterReadoutProps {
   centerCopyTransitionKey: number
@@ -34,10 +34,22 @@ export function CenterReadout({
   shouldAnimateUtcMinutes,
   ringError,
 }: CenterReadoutProps) {
+  const selectedCopyLabelLength = selectedCopyLabel.trim().length
+  const isLongSelectedCopyLabel = selectedCopyLabelLength >= 22
+  const isVeryLongSelectedCopyLabel = selectedCopyLabelLength >= 30
+
   return (
     <div className="relative z-[5] grid aspect-square w-[var(--ring-core-size)] min-w-[220px] place-content-center rounded-full border border-sky-200/20 p-4 text-center backdrop-blur-sm max-[900px]:min-w-[204px] max-[900px]:p-[0.9rem] fx-home-center-glass">
       <div key={centerCopyTransitionKey} className={centerCopy()}>
-        <p className="m-0 font-body text-[clamp(0.88rem,1.8vw,1.3rem)] font-light leading-[1.05] tracking-[0.2em] text-[#d6e7f4] uppercase max-[740px]:text-[clamp(0.78rem,3.7vw,1.04rem)]">
+        <p
+          className={cn(
+            "m-0 mx-auto max-w-full px-[0.44rem] font-body text-[clamp(0.88rem,1.8vw,1.3rem)] font-light leading-[1.05] tracking-[0.2em] text-[#d6e7f4] uppercase max-[740px]:text-[clamp(0.78rem,3.7vw,1.04rem)]",
+            isLongSelectedCopyLabel &&
+              "px-[0.72rem] text-[clamp(0.78rem,1.52vw,1.06rem)] tracking-[0.14em] max-[740px]:text-[clamp(0.72rem,3.2vw,0.9rem)]",
+            isVeryLongSelectedCopyLabel &&
+              "px-[0.86rem] text-[clamp(0.72rem,1.34vw,0.92rem)] tracking-[0.11em] max-[740px]:text-[clamp(0.68rem,2.9vw,0.82rem)]",
+          )}
+        >
           {selectedCopyLabel}
         </p>
         <p className="m-[0.92rem_0_0.9rem] inline-flex min-h-[1em] items-baseline font-display text-[clamp(2.8rem,7.84vw,5.46rem)] font-bold leading-[0.95] text-[#f3faff] [font-variant-numeric:tabular-nums] [text-shadow:0_0_24px_rgba(255,255,255,0.2)] max-[740px]:text-[clamp(2.45rem,13vw,4.06rem)]">

@@ -185,6 +185,7 @@ export interface HomeClockViewModel {
   shouldAnimateUtcMinutes: boolean
   ringError: string | null
   isRingTransitioning: boolean
+  areHourTicksVisible: boolean
   displayedWheelGradient: string
   wheelRotation: number
   orbitLabels: OrbitLabel[]
@@ -199,19 +200,24 @@ const STORAGE_SELECTED_ID = "same_sky_home_selected_item_id"
 const MOBILE_BREAKPOINT = 740
 const SKY_REFRESH_MS = 60_000
 const SELECTION_TRANSITION_MS = 780
+const GRADIENT_TRANSITION_MS = 1_900
 const SECONDS_PER_DAY = 24 * 60 * 60
+const DEFAULT_NOON_MINUTE = 720
+const DAYLIGHT_FAN_DELAY_RATIO = 0.72
 export const HOUR_MARKERS = Array.from({ length: 24 }, (_, hour) => hour)
-const NIGHT_SKY_STOP_NAMES = new Set([
-  "local_midnight_start",
-  "astronomical_night",
-  "astronomical_dusk",
-  "late_night",
-  "local_midnight_end",
+const DAYLIGHT_SKY_STOP_NAMES = new Set([
+  "sunrise",
+  "morning_golden_hour",
+  "mid_morning",
+  "solar_noon",
+  "mid_afternoon",
+  "afternoon_golden_hour",
+  "sunset",
 ])
 const DEFAULT_CONIC_GRADIENT_STOPS: ConicGradientStop[] = [
-  { minute: 0, colorHex: "#081521", alpha: 1 },
-  { minute: 720, colorHex: "#102f42", alpha: 1 },
-  { minute: 1440, colorHex: "#081521", alpha: 1 },
+  { minute: 0, colorHex: "#081521", alpha: 0 },
+  { minute: DEFAULT_NOON_MINUTE, colorHex: "#081521", alpha: 0 },
+  { minute: 1440, colorHex: "#081521", alpha: 0 },
 ]
 export const NUMBER_FLOW_PLUGINS = [continuous]
 const CLIENT_BASELINE_FACTORS: SharedSkySecondOrderFactors = {
@@ -266,13 +272,41 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+function isNonNull<T>(value: T | null): value is T {
+  return value !== null
+}
+
 function easeSelectionTransition(progress: number): number {
   const t = clamp(progress, 0, 1)
   return 1 - Math.pow(1 - t, 3)
 }
 
+function easeEpicGradientTransition(progress: number): number {
+  const t = clamp(progress, 0, 1)
+  if (t < 0.5) {
+    return 16 * Math.pow(t, 5)
+  }
+
+  return 1 - Math.pow(-2 * t + 2, 5) / 2
+}
+
 function lerpNumber(start: number, end: number, progress: number): number {
   return start + (end - start) * progress
+}
+
+function circularMinuteDistance(fromMinute: number, toMinute: number): number {
+  const from = normalizeMinutesOfDay(fromMinute)
+  const to = normalizeMinutesOfDay(toMinute)
+  const delta = Math.abs(from - to)
+  return Math.min(delta, 1440 - delta)
+}
+
+function fanOutProgressFromNoon(progress: number, minute: number, noonMinute: number): number {
+  const t = clamp(progress, 0, 1)
+  const distanceRatio = clamp(circularMinuteDistance(minute, noonMinute) / DEFAULT_NOON_MINUTE, 0, 1)
+  const revealStart = distanceRatio * DAYLIGHT_FAN_DELAY_RATIO
+  const revealSpan = Math.max(1 - revealStart, 0.0001)
+  return clamp((t - revealStart) / revealSpan, 0, 1)
 }
 
 function normalizeAngleDeltaRad(fromRad: number, toRad: number): number {
@@ -284,6 +318,27 @@ function normalizeAngleDeltaRad(fromRad: number, toRad: number): number {
     delta += Math.PI * 2
   }
   return delta
+}
+
+type OrbitCornerKey = "top-left" | "top-right" | "bottom-left" | "bottom-right"
+
+function directionFromOrbitPoints(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  centerX: number,
+  centerY: number,
+): number {
+  const startRadius = Math.hypot(fromX - centerX, fromY - centerY)
+  const endRadius = Math.hypot(toX - centerX, toY - centerY)
+  if (startRadius < 0.001 || endRadius < 0.001) {
+    return 0
+  }
+
+  const fromAngle = Math.atan2(fromY - centerY, fromX - centerX)
+  const toAngle = Math.atan2(toY - centerY, toX - centerX)
+  return Math.sign(normalizeAngleDeltaRad(fromAngle, toAngle))
 }
 
 function interpolateOrbitPoint(
@@ -325,6 +380,89 @@ function interpolateOrbitPoint(
   }
 }
 
+function isPointWithinLayoutRect(layout: OrbitLabelLayout, pointX: number, pointY: number): boolean {
+  const epsilon = 0.001
+  return (
+    pointX >= layout.x - epsilon &&
+    pointX <= layout.x + layout.width + epsilon &&
+    pointY >= layout.y - epsilon &&
+    pointY <= layout.y + layout.height + epsilon
+  )
+}
+
+function pointRatioWithinRect(point: number, start: number, size: number): number {
+  if (!Number.isFinite(size) || size <= 0.001) {
+    return 0.5
+  }
+
+  return clamp((point - start) / size, 0, 1)
+}
+
+function inferLayoutCornerAttachment(layout: OrbitLabelLayout): OrbitCornerKey | null {
+  if (!isPointWithinLayoutRect(layout, layout.spokeEndX, layout.spokeEndY)) {
+    return null
+  }
+
+  const ratioX = pointRatioWithinRect(layout.spokeEndX, layout.x, layout.width)
+  const ratioY = pointRatioWithinRect(layout.spokeEndY, layout.y, layout.height)
+  const horizontal = ratioX <= 0.35 ? "left" : ratioX >= 0.65 ? "right" : null
+  const vertical = ratioY <= 0.35 ? "top" : ratioY >= 0.65 ? "bottom" : null
+  if (!horizontal || !vertical) {
+    return null
+  }
+
+  return `${vertical}-${horizontal}` as OrbitCornerKey
+}
+
+function hubFacingCornerForAnchor(anchorX: number, anchorY: number, centerX: number, centerY: number): OrbitCornerKey {
+  const horizontal = anchorX - centerX >= 0 ? "left" : "right"
+  const vertical = anchorY - centerY >= 0 ? "top" : "bottom"
+  return `${vertical}-${horizontal}` as OrbitCornerKey
+}
+
+function shouldAllowCornerSwitchSweepOverride(
+  source: OrbitLabelLayout,
+  target: OrbitLabelLayout,
+  centerX: number,
+  centerY: number,
+): boolean {
+  const sourceCorner = inferLayoutCornerAttachment(source)
+  const targetCorner = inferLayoutCornerAttachment(target)
+  if (!sourceCorner || !targetCorner || sourceCorner === targetCorner) {
+    return false
+  }
+
+  const sourceDefaultCorner = hubFacingCornerForAnchor(source.anchorX, source.anchorY, centerX, centerY)
+  const targetDefaultCorner = hubFacingCornerForAnchor(target.anchorX, target.anchorY, centerX, centerY)
+  return sourceCorner !== sourceDefaultCorner && targetCorner !== targetDefaultCorner
+}
+
+function resolveLayoutSweepDirection(
+  source: OrbitLabelLayout,
+  target: OrbitLabelLayout,
+  centerX: number,
+  centerY: number,
+  defaultDirection: number,
+): number {
+  if (!shouldAllowCornerSwitchSweepOverride(source, target, centerX, centerY)) {
+    return defaultDirection
+  }
+
+  const sourceCenterX = source.x + source.width / 2
+  const sourceCenterY = source.y + source.height / 2
+  const targetCenterX = target.x + target.width / 2
+  const targetCenterY = target.y + target.height / 2
+  const shortestDirection = directionFromOrbitPoints(
+    sourceCenterX,
+    sourceCenterY,
+    targetCenterX,
+    targetCenterY,
+    centerX,
+    centerY,
+  )
+  return shortestDirection === 0 ? defaultDirection : shortestDirection
+}
+
 function buildSpokePath(startX: number, startY: number, endX: number, endY: number): string {
   return `M ${startX.toFixed(2)} ${startY.toFixed(2)} L ${endX.toFixed(2)} ${endY.toFixed(2)}`
 }
@@ -346,6 +484,20 @@ function findSelectedLayoutId(layouts: OrbitLabelLayout[]): string | null {
 
 function createLayoutMap(layouts: OrbitLabelLayout[]): Map<string, OrbitLabelLayout> {
   return new Map(layouts.map((layout) => [layout.id, cloneOrbitLabelLayout(layout)]))
+}
+
+function layoutOrbitReferencePoint(layout: OrbitLabelLayout): { x: number; y: number } {
+  if (Number.isFinite(layout.spokeEndX) && Number.isFinite(layout.spokeEndY)) {
+    return {
+      x: layout.spokeEndX,
+      y: layout.spokeEndY,
+    }
+  }
+
+  return {
+    x: layout.x + layout.width / 2,
+    y: layout.y + layout.height / 2,
+  }
 }
 
 export function computeSweepDirectionFromSnapshots(
@@ -376,8 +528,10 @@ export function computeSweepDirectionFromSnapshots(
       continue
     }
 
-    const fromAngle = Math.atan2(from.y - centerY, from.x - centerX)
-    const toAngle = Math.atan2(to.y - centerY, to.x - centerX)
+    const fromPoint = layoutOrbitReferencePoint(from)
+    const toPoint = layoutOrbitReferencePoint(to)
+    const fromAngle = Math.atan2(fromPoint.y - centerY, fromPoint.x - centerX)
+    const toAngle = Math.atan2(toPoint.y - centerY, toPoint.x - centerX)
     const delta = normalizeAngleDeltaRad(fromAngle, toAngle)
     const direction = Math.sign(delta)
     if (direction !== 0) {
@@ -386,6 +540,15 @@ export function computeSweepDirectionFromSnapshots(
   }
 
   return 0
+}
+
+function computeSweepDirectionFromRingRotations(fromRingRotationDeg: number, toRingRotationDeg: number): number {
+  const delta = toRingRotationDeg - fromRingRotationDeg
+  if (!Number.isFinite(delta) || Math.abs(delta) < 0.000001) {
+    return 0
+  }
+
+  return delta > 0 ? 1 : -1
 }
 
 export function createOrbitTransitionPlan(params: {
@@ -404,12 +567,7 @@ export function createOrbitTransitionPlan(params: {
   const fromLayoutById = createLayoutMap(params.fromLayouts)
   const toLayoutById = createLayoutMap(params.toLayouts)
   const order = params.toLayouts.map((layout) => layout.id)
-  const sweepDirection = computeSweepDirectionFromSnapshots(
-    fromLayoutById,
-    toLayoutById,
-    params.orbitSizePx,
-    params.preferredSweepLayoutId,
-  )
+  const sweepDirection = computeSweepDirectionFromRingRotations(params.fromRing.wheelRotationDeg, params.toRing.wheelRotationDeg)
 
   return {
     startedAtMs: params.startedAtMs,
@@ -446,6 +604,7 @@ export function interpolateOrbitTransitionPlan(plan: OrbitTransitionPlan, progre
         return cloneOrbitLabelLayout(target)
       }
 
+      const layoutSweepDirection = resolveLayoutSweepDirection(source, target, centerX, centerY, plan.sweepDirection)
       const framePosition = interpolateOrbitPoint(
         source.x,
         source.y,
@@ -453,9 +612,11 @@ export function interpolateOrbitTransitionPlan(plan: OrbitTransitionPlan, progre
         target.y,
         centerX,
         centerY,
-        target.isSelected ? plan.sweepDirection : 0,
+        layoutSweepDirection,
         t,
       )
+      const frameWidth = lerpNumber(source.width, target.width, t)
+      const frameHeight = lerpNumber(source.height, target.height, t)
       const frameAnchor = interpolateOrbitPoint(
         source.anchorX,
         source.anchorY,
@@ -463,26 +624,49 @@ export function interpolateOrbitTransitionPlan(plan: OrbitTransitionPlan, progre
         target.anchorY,
         centerX,
         centerY,
-        target.isSelected ? plan.sweepDirection : 0,
+        plan.sweepDirection,
         t,
       )
-      const frameSpokeEnd = interpolateOrbitPoint(
+      const orbitInterpolatedSpokeEnd = interpolateOrbitPoint(
         source.spokeEndX,
         source.spokeEndY,
         target.spokeEndX,
         target.spokeEndY,
         centerX,
         centerY,
-        target.isSelected ? plan.sweepDirection : 0,
+        plan.sweepDirection,
         t,
       )
+      const sourceSpokeAttached = isPointWithinLayoutRect(source, source.spokeEndX, source.spokeEndY)
+      const targetSpokeAttached = isPointWithinLayoutRect(target, target.spokeEndX, target.spokeEndY)
+      const frameSpokeEnd =
+        sourceSpokeAttached && targetSpokeAttached
+          ? {
+              x:
+                framePosition.x +
+                frameWidth *
+                  lerpNumber(
+                    pointRatioWithinRect(source.spokeEndX, source.x, source.width),
+                    pointRatioWithinRect(target.spokeEndX, target.x, target.width),
+                    t,
+                  ),
+              y:
+                framePosition.y +
+                frameHeight *
+                  lerpNumber(
+                    pointRatioWithinRect(source.spokeEndY, source.y, source.height),
+                    pointRatioWithinRect(target.spokeEndY, target.y, target.height),
+                    t,
+                  ),
+            }
+          : orbitInterpolatedSpokeEnd
 
       return {
         ...cloneOrbitLabelLayout(target),
         x: framePosition.x,
         y: framePosition.y,
-        width: lerpNumber(source.width, target.width, t),
-        height: lerpNumber(source.height, target.height, t),
+        width: frameWidth,
+        height: frameHeight,
         anchorX: frameAnchor.x,
         anchorY: frameAnchor.y,
         spokeEndX: frameSpokeEnd.x,
@@ -854,7 +1038,7 @@ function buildConicGradientStops(stops: SkyStop[]): ConicGradientStop[] {
     .map((stop) => ({
       minute: stop.minutesOfDay,
       colorHex: stop.colorHex || "#081521",
-      alpha: NIGHT_SKY_STOP_NAMES.has(stop.name) ? 0.46 : 1,
+      alpha: DAYLIGHT_SKY_STOP_NAMES.has(stop.name.trim().toLowerCase()) ? 1 : 0,
     }))
 
   return normalizeConicGradientStops(mapped)
@@ -945,6 +1129,8 @@ function interpolateConicGradientStops(
   fromStops: ConicGradientStop[],
   toStops: ConicGradientStop[],
   progress: number,
+  noonMinute: number = DEFAULT_NOON_MINUTE,
+  useDaylightFanDelay: boolean = false,
 ): ConicGradientStop[] {
   const t = clamp(progress, 0, 1)
   if (t <= 0) {
@@ -967,14 +1153,16 @@ function interpolateConicGradientStops(
     minuteByKey.set(stop.minute.toFixed(3), stop.minute)
   }
 
+  const fanOriginMinute = clamp(noonMinute, 0, 1440)
   const minutes = [...minuteByKey.values()].sort((left, right) => left - right)
   return minutes.map((minute) => {
     const fromSample = sampleNormalizedConicGradientStopAtMinute(fromNormalized, minute)
     const toSample = sampleNormalizedConicGradientStopAtMinute(toNormalized, minute)
+    const localProgress = useDaylightFanDelay ? fanOutProgressFromNoon(t, minute, fanOriginMinute) : t
     return {
       minute,
-      colorHex: mixHexColors(fromSample.colorHex, toSample.colorHex, t),
-      alpha: lerpNumber(fromSample.alpha, toSample.alpha, t),
+      colorHex: mixHexColors(fromSample.colorHex, toSample.colorHex, localProgress),
+      alpha: lerpNumber(fromSample.alpha, toSample.alpha, localProgress),
     }
   })
 }
@@ -1130,8 +1318,9 @@ function measureGroupedLabelWidth(group: OrbitLabelGroup, isMobile: boolean): nu
     return Math.max(currentMax, rowWidth)
   }, 0)
   const footerDateTime = group.shortDateTime24 ?? group.time
-  const footerLocalDelta = formatDecimalOffsetHours(group.localRelativeOffsetMinutes ?? group.relativeOffsetMinutes)
-  const footerText = `${footerDateTime} · ${footerLocalDelta}`
+  const footerRelativeDelta = formatDecimalOffsetHours(group.relativeOffsetMinutes)
+  const footerOffsetLabel = group.isSelected ? "Now" : footerRelativeDelta
+  const footerText = `${footerDateTime} · ${footerOffsetLabel}`
   const metaWidth =
     metaPadLeftPx +
     measureTextWidth(footerText, metaFont) +
@@ -1150,6 +1339,7 @@ export function useHomeClockModel(): HomeClockViewModel {
   const [displayedWheelGradient, setDisplayedWheelGradient] = useState<string>(() =>
     buildConicGradient(DEFAULT_CONIC_GRADIENT_STOPS),
   )
+  const [areHourTicksVisible, setAreHourTicksVisible] = useState<boolean>(() => prefersReducedMotion())
   const [gradientTransitionToken, setGradientTransitionToken] = useState<number>(0)
   const [isRingTransitioning, setIsRingTransitioning] = useState<boolean>(false)
   const [wheelBaseRotationDeg, setWheelBaseRotationDeg] = useState<number>(0)
@@ -1236,6 +1426,14 @@ export function useHomeClockModel(): HomeClockViewModel {
   const isTimeCounterAnimatingRef = useRef<boolean>(false)
 
   const wheelGradientStops = useMemo(() => buildConicGradientStops(sky?.stops ?? []), [sky])
+  const gradientFanMinute = useMemo(() => {
+    const solarNoonStop = sky?.stops.find((stop) => stop.name === "solar_noon" && Number.isFinite(stop.minutesOfDay))
+    if (!solarNoonStop) {
+      return DEFAULT_NOON_MINUTE
+    }
+
+    return clamp(solarNoonStop.minutesOfDay, 0, 1440)
+  }, [sky])
 
   useLayoutEffect(() => {
     if (!sky) {
@@ -1288,7 +1486,7 @@ export function useHomeClockModel(): HomeClockViewModel {
 
   const orbitLabels = useMemo(() => {
     return sortedLocations
-      .map((location) => {
+      .map((location): OrbitLabel | null => {
         if (!location.timezone) {
           return null
         }
@@ -1321,7 +1519,7 @@ export function useHomeClockModel(): HomeClockViewModel {
           isLocal: offset === localOffsetMinutes,
         }
       })
-      .filter((value): value is OrbitLabel => value !== null)
+      .filter(isNonNull)
       .sort((left, right) => left.angleDeg - right.angleDeg)
   }, [
     sortedLocations,
@@ -1350,7 +1548,7 @@ export function useHomeClockModel(): HomeClockViewModel {
     }
 
     return [...groups.entries()]
-      .map(([timezoneKey, labels]) => {
+      .map(([timezoneKey, labels]): OrbitLabelGroup | null => {
         const members = [...labels].sort((left, right) => {
           return left.label.localeCompare(right.label)
         })
@@ -1387,7 +1585,7 @@ export function useHomeClockModel(): HomeClockViewModel {
           })),
         } satisfies OrbitLabelGroup
       })
-      .filter((value): value is OrbitLabelGroup => value !== null)
+      .filter(isNonNull)
       .sort((left, right) => left.angleDeg - right.angleDeg)
   }, [orbitLabels])
 
@@ -1416,7 +1614,7 @@ export function useHomeClockModel(): HomeClockViewModel {
 
   const orbitLabelLayout = useMemo(() => {
     return orbitLayoutResult.labels
-      .map((layout) => {
+      .map((layout): OrbitLabelLayout | null => {
         const group = orbitLabelGroupLookup.get(layout.id)
         if (!group) {
           return null
@@ -1427,7 +1625,7 @@ export function useHomeClockModel(): HomeClockViewModel {
           ...layout,
         }
       })
-      .filter((value): value is OrbitLabelLayout => value !== null)
+      .filter(isNonNull)
   }, [orbitLayoutResult.labels, orbitLabelGroupLookup])
 
   useEffect(() => {
@@ -1589,6 +1787,29 @@ export function useHomeClockModel(): HomeClockViewModel {
   }, [selectedId])
 
   useEffect(() => {
+    if (areHourTicksVisible || !sky) {
+      return
+    }
+
+    if (prefersReducedMotion()) {
+      setAreHourTicksVisible(true)
+      return
+    }
+
+    let cancelled = false
+    const revealRaf = window.requestAnimationFrame(() => {
+      if (!cancelled) {
+        setAreHourTicksVisible(true)
+      }
+    })
+
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(revealRaf)
+    }
+  }, [sky, areHourTicksVisible])
+
+  useEffect(() => {
     const currentStops = displayedWheelGradientStopsRef.current
     if (areConicGradientStopsEqual(currentStops, wheelGradientStops)) {
       return
@@ -1599,8 +1820,13 @@ export function useHomeClockModel(): HomeClockViewModel {
       gradientMorphRafRef.current = null
     }
 
+    const shouldAnimateFromDefaultMidnight =
+      areConicGradientStopsEqual(currentStops, DEFAULT_CONIC_GRADIENT_STOPS) &&
+      !areConicGradientStopsEqual(wheelGradientStops, DEFAULT_CONIC_GRADIENT_STOPS)
     const shouldAnimate =
-      gradientTransitionToken > lastAnimatedGradientTokenRef.current && currentStops.length > 0 && !prefersReducedMotion()
+      (gradientTransitionToken > lastAnimatedGradientTokenRef.current || shouldAnimateFromDefaultMidnight) &&
+      currentStops.length > 0 &&
+      !prefersReducedMotion()
     if (!shouldAnimate) {
       const normalizedTarget = normalizeConicGradientStops(wheelGradientStops)
       displayedWheelGradientStopsRef.current = cloneConicGradientStops(normalizedTarget)
@@ -1611,12 +1837,19 @@ export function useHomeClockModel(): HomeClockViewModel {
     const fromStops = cloneConicGradientStops(currentStops)
     const toStops = cloneConicGradientStops(wheelGradientStops)
     const startedAtMs = performance.now()
+    const useDaylightFanDelay = shouldAnimateFromDefaultMidnight
     lastAnimatedGradientTokenRef.current = gradientTransitionToken
 
     const tick = (frameNowMs: number) => {
-      const progress = clamp((frameNowMs - startedAtMs) / SELECTION_TRANSITION_MS, 0, 1)
-      const easedProgress = easeSelectionTransition(progress)
-      const frameStops = interpolateConicGradientStops(fromStops, toStops, easedProgress)
+      const progress = clamp((frameNowMs - startedAtMs) / GRADIENT_TRANSITION_MS, 0, 1)
+      const easedProgress = easeEpicGradientTransition(progress)
+      const frameStops = interpolateConicGradientStops(
+        fromStops,
+        toStops,
+        easedProgress,
+        gradientFanMinute,
+        useDaylightFanDelay,
+      )
       displayedWheelGradientStopsRef.current = frameStops
       setDisplayedWheelGradient(buildConicGradient(frameStops))
 
@@ -1629,7 +1862,7 @@ export function useHomeClockModel(): HomeClockViewModel {
     }
 
     gradientMorphRafRef.current = window.requestAnimationFrame(tick)
-  }, [wheelGradientStops, gradientTransitionToken])
+  }, [wheelGradientStops, gradientTransitionToken, gradientFanMinute])
 
   const loadSavedLocations = useCallback(async () => {
     try {
@@ -1917,6 +2150,7 @@ export function useHomeClockModel(): HomeClockViewModel {
     shouldAnimateUtcMinutes,
     ringError,
     isRingTransitioning,
+    areHourTicksVisible,
     displayedWheelGradient,
     wheelRotation: displayWheelRotation,
     orbitLabels,

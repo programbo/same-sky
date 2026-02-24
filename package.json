@@ -16,7 +16,9 @@
     "@inquirer/prompts": "^8.2.1",
     "@number-flow/react": "^0.5.12",
     "bun-plugin-tailwind": "^0.1.2",
+    "motion": "^12.34.3",
     "react": "^19",
+    "react-aria-components": "^1.15.1",
     "react-dom": "^19",
     "tailwindcss": "^4.1.11",
     "xstate": "^5.28.0"

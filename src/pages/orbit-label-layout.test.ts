@@ -72,6 +72,20 @@ function distanceFromPointToRect(px: number, py: number, x: number, y: number, w
   return Math.hypot(px - nearestX, py - nearestY)
 }
 
+function maxDistanceFromCenterToRectCorner(centerX: number, centerY: number, x: number, y: number, width: number, height: number): number {
+  const corners = [
+    { x, y },
+    { x: x + width, y },
+    { x, y: y + height },
+    { x: x + width, y: y + height },
+  ]
+  return Math.max(
+    ...corners.map((corner) => {
+      return Math.hypot(corner.x - centerX, corner.y - centerY)
+    }),
+  )
+}
+
 describe("computeOrbitLabelLayout", () => {
   test("keeps labels non-overlapping", () => {
     const labels: OrbitLabelLayoutInput[] = Array.from({ length: 8 }, (_, index) => ({
@@ -172,6 +186,48 @@ describe("computeOrbitLabelLayout", () => {
       })
       expect(matchesAny).toBe(true)
     }
+  })
+
+  test("uses mobile corner inset that matches the card corner radius", () => {
+    const labels: OrbitLabelLayoutInput[] = [
+      { id: "mobile-east", angleDeg: 90, isSelected: false, isLocal: false, width: 220, height: 46 },
+    ]
+    const frame = 640
+
+    const result = computeOrbitLabelLayout(labels, {
+      frameWidth: frame,
+      frameHeight: frame,
+      ringDiameter: frame,
+      isMobile: true,
+    })
+
+    const label = result.labels.find((entry) => entry.id === "mobile-east")
+    expect(label).toBeDefined()
+    if (!label) {
+      return
+    }
+
+    const end = parseSpokeEnd(label.spokePath)
+    const radialX = label.anchorX - frame / 2
+    const radialY = label.anchorY - frame / 2
+    const radialLength = Math.hypot(radialX, radialY)
+    const normalX = radialX / radialLength
+    const normalY = radialY / radialLength
+
+    const expectedCandidates = expectedCornerInsetPointsByNormal(
+      label.x,
+      label.y,
+      label.width,
+      label.height,
+      normalX,
+      normalY,
+      13,
+    )
+    const matchesAny = expectedCandidates.some((candidate) => {
+      return Math.abs(end.x - candidate.x) <= 0.06 && Math.abs(end.y - candidate.y) <= 0.06
+    })
+
+    expect(matchesAny).toBe(true)
   })
 
   test("uses opposite sides for opposite clock hemispheres", () => {
@@ -343,7 +399,7 @@ describe("computeOrbitLabelLayout", () => {
     })
 
     const center = frameSize / 2
-    const forbiddenRadius = hourRingOuterRadius(frameSize, false) + 6
+    const forbiddenRadius = hourRingOuterRadius(frameSize, false) + 9
 
     for (const label of result.labels) {
       const nearest = distanceFromPointToRect(center, center, label.x, label.y, label.width, label.height)
@@ -372,9 +428,53 @@ describe("computeOrbitLabelLayout", () => {
     expect(selected).toBeDefined()
 
     const centerY = frameSize / 2
-    const forbiddenRadius = hourRingOuterRadius(frameSize, false) + 6
+    const forbiddenRadius = hourRingOuterRadius(frameSize, false) + 9
     const selectedBottom = (selected?.y ?? 0) + (selected?.height ?? 0)
 
     expect(selectedBottom <= centerY - forbiddenRadius + 0.05).toBe(true)
+  })
+
+  test("allows cards outside the sky ring while keeping viewport and hours-ring clearance", () => {
+    const frameWidth = 960
+    const frameHeight = 820
+    const ringDiameter = 700
+    const centerX = frameWidth / 2
+    const centerY = frameHeight / 2
+    const skyRingOuterRadius = ringDiameter / 2
+    const forbiddenRadius = hourRingOuterRadius(ringDiameter, false) + 9
+
+    const labels: OrbitLabelLayoutInput[] = Array.from({ length: 12 }, (_, index) => ({
+      id: `orbit-${index}`,
+      angleDeg: -78 + index * 14,
+      isSelected: index === 5,
+      isLocal: false,
+      width: index === 5 ? 244 : 196,
+      height: index === 5 ? 52 : 44,
+    }))
+
+    const result = computeOrbitLabelLayout(labels, {
+      frameWidth,
+      frameHeight,
+      ringDiameter,
+      isMobile: false,
+    })
+
+    let hasOutsideSkyRingCard = false
+    for (const label of result.labels) {
+      expect(label.x).toBeGreaterThanOrEqual(0)
+      expect(label.y).toBeGreaterThanOrEqual(0)
+      expect(label.x + label.width).toBeLessThanOrEqual(frameWidth)
+      expect(label.y + label.height).toBeLessThanOrEqual(frameHeight)
+
+      const nearestToCenter = distanceFromPointToRect(centerX, centerY, label.x, label.y, label.width, label.height)
+      expect(nearestToCenter >= forbiddenRadius - 0.05).toBe(true)
+
+      const farthestCorner = maxDistanceFromCenterToRectCorner(centerX, centerY, label.x, label.y, label.width, label.height)
+      if (farthestCorner > skyRingOuterRadius + 0.05) {
+        hasOutsideSkyRingCard = true
+      }
+    }
+
+    expect(hasOutsideSkyRingCard).toBe(true)
   })
 })

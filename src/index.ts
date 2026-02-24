@@ -525,8 +525,6 @@ export function createServer(options: CreateServerOptions = {}) {
     port: options.port,
     routes: {
       "/": index,
-      "/with-css": index,
-      "/ring-renderer": index,
 
       // Serve index.html for other unmatched frontend routes (deep links).
       "/*": index,
