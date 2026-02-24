@@ -49,7 +49,7 @@ export const centerCopy = tv({
 })
 
 export const orbitLabel = tv({
-  base: "group absolute left-0 top-0 m-0 border-0 bg-transparent p-0 text-left pointer-events-auto cursor-pointer transition-[width,height] duration-[var(--home-rotation-switch-duration)] ease-[var(--home-rotation-switch-easing)] will-change-[transform,width,height] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-home-focus focus-visible:outline-offset-2",
+  base: "group absolute left-0 top-0 m-0 border-0 bg-transparent p-0 text-left pointer-events-auto cursor-default transition-[width,height] duration-[var(--home-rotation-switch-duration)] ease-[var(--home-rotation-switch-easing)] will-change-[transform,width,height] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-home-focus focus-visible:outline-offset-2",
   variants: {
     side: {
       left: "origin-right",
@@ -71,7 +71,7 @@ export const labelSpoke = tv({
 })
 
 export const orbitChip = tv({
-  base: "flex w-full min-h-0 flex-col items-stretch justify-start gap-y-[0.12rem] rounded-[16px] p-[0.2rem] text-left text-white backdrop-blur-[3px] transition-[transform,box-shadow,border-color] duration-150 ease-out max-[900px]:rounded-[13px] fx-home-orbit-chip group-hover:-translate-y-px group-hover:shadow-[0_12px_28px_#000b1487]",
+  base: "flex w-full min-h-0 flex-col items-stretch justify-start gap-y-[0.12rem] rounded-[16px] p-[0.2rem] text-left text-white backdrop-blur-[3px] transition-[transform,box-shadow,border-color] duration-150 ease-out max-[900px]:rounded-[13px] fx-home-orbit-chip",
   variants: {
     selected: {
       true: "fx-home-orbit-chip-selected",
@@ -83,10 +83,10 @@ export const orbitChip = tv({
 })
 
 export const orbitEntityRow = tv({
-  base: "grid min-h-10 w-full grid-cols-[var(--orbit-icon-col)_minmax(0,1fr)] items-start gap-x-[var(--orbit-row-gap)] rounded-[10px] border border-transparent bg-transparent px-[var(--orbit-row-pad-x)] py-[0.38rem] text-left text-white transition-[background-color,border-color,box-shadow] duration-150 ease-out focus-visible:outline-2 focus-visible:outline-home-focus focus-visible:outline-offset-1",
+  base: "grid min-h-10 w-full cursor-pointer grid-cols-[var(--orbit-icon-col)_minmax(0,1fr)] items-center gap-x-[var(--orbit-row-gap)] rounded-[10px] border border-transparent bg-transparent px-[var(--orbit-row-pad-x)] py-[0.34rem] text-left text-white transition-[background-color,border-color,box-shadow] duration-150 ease-out hover:border-[#ffd89d99] hover:bg-[#ffd89d1f] hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)] focus-visible:outline-2 focus-visible:outline-home-focus focus-visible:outline-offset-1",
   variants: {
     selected: {
-      true: "border-[#8fb0cc4d] bg-[#aec8df1a] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]",
+      true: "border-[#ffd89d99] bg-[#ffd89d1f] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]",
     },
   },
 })

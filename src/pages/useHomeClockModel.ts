@@ -79,9 +79,11 @@ export interface OrbitLabel {
   leadingEmoji: string
   label: string
   time: string
+  shortDateTime24?: string
   timezoneMeta: string
   relativeLabel: string
   relativeOffsetMinutes: number
+  localRelativeOffsetMinutes?: number
   angleDeg: number
   skyColorHex: string
   isSelected: boolean
@@ -102,9 +104,11 @@ export interface OrbitLabelGroup {
   id: string
   timezoneKey: string
   time: string
+  shortDateTime24?: string
   timezoneMeta: string
   relativeLabel: string
   relativeOffsetMinutes: number
+  localRelativeOffsetMinutes?: number
   angleDeg: number
   skyColorHex: string
   isSelected: boolean
@@ -665,12 +669,37 @@ export function formatRelativeOffsetDirectionLabel(deltaMinutes: number): string
   return `(${offset} ${direction})`
 }
 
+export function formatDecimalOffsetHours(deltaMinutes: number): string {
+  const sign = deltaMinutes >= 0 ? "+" : "-"
+  const absoluteHours = Math.abs(deltaMinutes) / 60
+  let formatted = absoluteHours.toFixed(2)
+  if (formatted.endsWith("00")) {
+    formatted = `${Math.trunc(absoluteHours)}.0`
+  } else if (formatted.endsWith("0")) {
+    formatted = formatted.slice(0, -1)
+  }
+
+  return `${sign}${formatted}h`
+}
+
 function formatTimeInZone(timeZone: string | undefined, atMs: number): string {
   return new Intl.DateTimeFormat("en-US", {
     timeZone,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    hourCycle: "h23",
+  }).format(new Date(atMs))
+}
+
+function formatShortDateTime24InZone(timeZone: string | undefined, atMs: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "2-digit",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
     hourCycle: "h23",
   }).format(new Date(atMs))
 }
@@ -1087,7 +1116,6 @@ function measureGroupedLabelWidth(group: OrbitLabelGroup, isMobile: boolean): nu
   const chipPadRightPx = 0.2 * BASE_REM_PX
   const metaPadLeftPx = rowPadLeftPx + iconColumnPx + rowGapPx
   const metaPadRightPx = rowPadRightPx
-  const metaOffsetGapPx = 0.3 * BASE_REM_PX
   const safetyBufferPx = 18
 
   const entityNameFont = `300 ${entityNameFontPx.toFixed(2)}px ${LABEL_FONT_FAMILY}`
@@ -1101,12 +1129,12 @@ function measureGroupedLabelWidth(group: OrbitLabelGroup, isMobile: boolean): nu
     const rowWidth = rowPadLeftPx + effectiveIconWidth + rowGapPx + nameWidth + rowPadRightPx
     return Math.max(currentMax, rowWidth)
   }, 0)
-  const offsetSuffix = group.isSelected ? "" : formatRelativeOffsetDirectionLabel(group.relativeOffsetMinutes)
-  const hasOffsetSuffix = offsetSuffix.length > 0
+  const footerDateTime = group.shortDateTime24 ?? group.time
+  const footerLocalDelta = formatDecimalOffsetHours(group.localRelativeOffsetMinutes ?? group.relativeOffsetMinutes)
+  const footerText = `${footerDateTime} · ${footerLocalDelta}`
   const metaWidth =
     metaPadLeftPx +
-    measureTextWidth(group.time, metaFont) +
-    (hasOffsetSuffix ? metaOffsetGapPx + measureTextWidth(offsetSuffix, metaFont) : 0) +
+    measureTextWidth(footerText, metaFont) +
     metaPadRightPx
 
   return Math.ceil(chipPadLeftPx + Math.max(widestEntityRow, metaWidth) + chipPadRightPx + safetyBufferPx)
@@ -1271,6 +1299,7 @@ export function useHomeClockModel(): HomeClockViewModel {
         }
 
         const deltaMinutes = shortestOffsetDeltaMinutes(safeSelectedOffset, offset)
+        const localDeltaMinutes = offset - localOffsetMinutes
         const absoluteOffsetAngleDeg = toAngleFromTopDeg(offset)
         const minutesOfDay =
           getMinutesOfDayInZone(location.timezone, clockNowMs) ?? normalizeMinutesOfDay(Math.round(clockNowMs / 60_000))
@@ -1281,9 +1310,11 @@ export function useHomeClockModel(): HomeClockViewModel {
           leadingEmoji: leadingEmojiForLocation(location),
           label: locationDisplayLabel(location),
           time: formatTimeInZone(location.timezone, clockNowMs),
+          shortDateTime24: formatShortDateTime24InZone(location.timezone, clockNowMs),
           timezoneMeta: formatTimezoneMeta(location.timezone, clockNowMs),
           relativeLabel: formatRelativeOffsetLabel(deltaMinutes),
           relativeOffsetMinutes: deltaMinutes,
+          localRelativeOffsetMinutes: localDeltaMinutes,
           angleDeg: absoluteOffsetAngleDeg - selectedOrbitAnchorDeg,
           skyColorHex: sampleSkyColorAtMinute(sky?.stops ?? [], minutesOfDay),
           isSelected: location.id === selectedId,
@@ -1335,9 +1366,11 @@ export function useHomeClockModel(): HomeClockViewModel {
           id: `tz-${timezoneKey}`,
           timezoneKey,
           time: primary.time,
+          shortDateTime24: primary.shortDateTime24,
           timezoneMeta: primary.timezoneMeta,
           relativeLabel: primary.relativeLabel,
           relativeOffsetMinutes: primary.relativeOffsetMinutes,
+          localRelativeOffsetMinutes: primary.localRelativeOffsetMinutes,
           angleDeg: primary.angleDeg,
           skyColorHex: primary.skyColorHex,
           isSelected: members.some((member) => member.isSelected),

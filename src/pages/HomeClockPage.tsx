@@ -3,7 +3,7 @@ import NumberFlow from "@number-flow/react"
 import "../home-clock.css"
 import "../with-css.css"
 import {
-  formatRelativeOffsetDirectionLabel,
+  formatDecimalOffsetHours,
   HOUR_MARKERS,
   HOUR_TREND,
   MINUTE_TREND,
@@ -153,14 +153,15 @@ export function HomeClockPage() {
 
             {model.orbitLabelLayout.map((label) => {
               const primarySelectionId = label.members.find((member) => member.isSelected)?.id ?? label.members[0]?.id
-              const offsetSuffix = label.isSelected ? "" : formatRelativeOffsetDirectionLabel(label.relativeOffsetMinutes)
-              const timeWithOffset = offsetSuffix ? `${label.time} ${offsetSuffix}` : label.time
+              const footerDateTime = label.shortDateTime24 ?? label.time
+              const footerLocalDelta = formatDecimalOffsetHours(label.localRelativeOffsetMinutes ?? label.relativeOffsetMinutes)
+              const cardFooter = `${footerDateTime} · ${footerLocalDelta}`
               return (
                 <div
                   key={label.id}
                   role="option"
                   aria-selected={label.isSelected}
-                  aria-label={`${timeWithOffset} ${label.timezoneMeta}`}
+                  aria-label={`${cardFooter} ${label.timezoneMeta}`}
                   className={`home-orbit-label ${model.isRingTransitioning ? "is-switching" : ""} ${label.side === "left" ? "side-left" : "side-right"} ${
                     label.isSelected ? "is-selected" : ""
                   } ${label.isLocal ? "is-local" : ""}`}
@@ -169,7 +170,7 @@ export function HomeClockPage() {
                     width: `${label.width}px`,
                     zIndex: label.isSelected ? 18 : 10,
                   }}
-                  title={`${timeWithOffset} ${label.timezoneMeta}`}
+                  title={`${cardFooter} ${label.timezoneMeta}`}
                   tabIndex={0}
                   onClick={() => {
                     if (primarySelectionId) {
@@ -202,13 +203,12 @@ export function HomeClockPage() {
                           <span className="home-orbit-entity-emoji" aria-hidden="true">
                             {member.leadingEmoji}
                           </span>
-                          <span className="home-orbit-entity-name">{member.label}</span>
+                          <span className={`home-orbit-entity-name ${member.isSelected ? "is-selected" : ""}`}>{member.label}</span>
                         </button>
                       ))}
                     </em>
                     <strong className="home-orbit-chip-meta">
-                      <span className="home-orbit-chip-time">{label.time}</span>
-                      {!label.isSelected ? <span className="home-orbit-chip-offset">{offsetSuffix}</span> : null}
+                      <span className="home-orbit-chip-time">{cardFooter}</span>
                     </strong>
                   </span>
                 </div>

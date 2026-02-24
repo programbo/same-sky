@@ -8,12 +8,12 @@ interface HourTickLayerProps {
 }
 
 export function HourTickLayer({ wheelRotation, isRingTransitioning }: HourTickLayerProps) {
-  const markerText = (hour: number): string => {
+  const markerText = (hour: number): React.ReactNode => {
     if (hour === 0) {
-      return "🌙"
+      return <span className="text-[1.55em] leading-none">🌙</span>
     }
     if (hour === 12) {
-      return "☀️"
+      return <span className="text-[1.55em] leading-none">☀️</span>
     }
     return String(hour).padStart(2, "0")
   }

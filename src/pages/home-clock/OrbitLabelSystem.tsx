@@ -1,5 +1,5 @@
 import type React from "react"
-import { formatRelativeOffsetDirectionLabel, type OrbitLabelLayout } from "../useHomeClockModel"
+import { formatDecimalOffsetHours, type OrbitLabelLayout } from "../useHomeClockModel"
 import { cn, labelSpoke, orbitChip, orbitEntityRow, orbitLabel } from "./homeClock.variants"
 
 interface OrbitLabelSystemProps {
@@ -32,20 +32,21 @@ export function OrbitLabelSystem({ orbitLabelLayout, isRingTransitioning, setSel
 
       {orbitLabelLayout.map((label) => {
         const primarySelectionId = label.members.find((member) => member.isSelected)?.id ?? label.members[0]?.id
-        const offsetSuffix = label.isSelected ? "" : formatRelativeOffsetDirectionLabel(label.relativeOffsetMinutes)
-        const timeWithOffset = offsetSuffix ? `${label.time} ${offsetSuffix}` : label.time
+        const footerDateTime = label.shortDateTime24 ?? label.time
+        const footerLocalDelta = formatDecimalOffsetHours(label.localRelativeOffsetMinutes ?? label.relativeOffsetMinutes)
+        const cardFooter = `${footerDateTime} · ${footerLocalDelta}`
         return (
           <div
             key={label.id}
             role="option"
             aria-selected={label.isSelected}
-            aria-label={`${timeWithOffset} ${label.timezoneMeta}`}
+            aria-label={`${cardFooter} ${label.timezoneMeta}`}
             className={cn(orbitLabel({ side: label.side, switching: isRingTransitioning }), label.isSelected ? "z-[18]" : "z-[10]")}
             style={{
               transform: `translate(${label.x}px, ${label.y}px)`,
               width: `${label.width}px`,
             }}
-            title={`${timeWithOffset} ${label.timezoneMeta}`}
+            title={`${cardFooter} ${label.timezoneMeta}`}
             tabIndex={0}
             onClick={() => {
               if (primarySelectionId) {
@@ -70,7 +71,7 @@ export function OrbitLabelSystem({ orbitLabelLayout, isRingTransitioning, setSel
                 } as React.CSSProperties
               }
             >
-              <em className="order-1 flex flex-col gap-[0.26rem] p-0 text-[0.84rem] not-italic tracking-[0.03em] text-white max-[900px]:text-[0.74rem]">
+              <em className="order-1 flex flex-col gap-[0.22rem] p-0 text-[0.84rem] not-italic tracking-[0.03em] text-white max-[900px]:text-[0.74rem]">
                 {label.members.map((member) => (
                   <button
                     key={member.id}
@@ -82,18 +83,24 @@ export function OrbitLabelSystem({ orbitLabelLayout, isRingTransitioning, setSel
                     }}
                     title={`${member.label} · ${member.time} (${member.relativeLabel})`}
                   >
-                    <span className="mt-[0.12rem] text-[1.12rem] leading-none" aria-hidden="true">
+                    <span className="text-[1.12rem] leading-none" aria-hidden="true">
                       {member.leadingEmoji}
                     </span>
-                    <span className="break-words font-body text-[0.96rem] font-light leading-[1.18] tracking-[0.018em] text-[#f5fbff] [overflow-wrap:anywhere] [word-break:break-word] [font-synthesis:none]">
+                    <span
+                      className={cn(
+                        "break-words font-body text-[0.96rem] font-light leading-[1.18] tracking-[0.018em] [overflow-wrap:anywhere] [word-break:break-word] [font-synthesis:none]",
+                        member.isSelected ? "text-[#ffd89d]" : "text-[#f5fbff]",
+                      )}
+                    >
                       {member.label}
                     </span>
                   </button>
                 ))}
               </em>
-              <strong className="order-2 block min-w-0 whitespace-nowrap px-[calc(var(--orbit-row-pad-x)+var(--orbit-icon-col)+var(--orbit-row-gap))] pb-[0.48rem] pt-[0.1rem] font-body text-[0.8rem] leading-[1.2] tracking-[0.025em] text-[#f0f8ff] max-[900px]:text-[0.76rem]">
-                <span className="font-bold text-white [font-feature-settings:'lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]">{label.time}</span>
-                {!label.isSelected ? <span className="ml-[0.3rem] font-semibold text-[#e5f1ff] opacity-95">{offsetSuffix}</span> : null}
+              <strong className="order-2 block min-w-0 whitespace-nowrap px-[calc(var(--orbit-row-pad-x)+var(--orbit-icon-col)+var(--orbit-row-gap))] pb-[0.44rem] pt-[0.14rem] font-body text-[0.8rem] leading-[1.2] tracking-[0.025em] text-[#f0f8ff] max-[900px]:text-[0.76rem]">
+                <span className="font-bold text-white [font-feature-settings:'lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]">
+                  {cardFooter}
+                </span>
               </strong>
             </span>
           </div>
