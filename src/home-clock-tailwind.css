@@ -47,8 +47,7 @@
     pointer-events: none;
     background:
       radial-gradient(circle at 34% 28%, #66a3ce40 0, #0000 42%),
-      radial-gradient(circle at 69% 70%, #f5c67b3f 0, #0000 36%),
-      linear-gradient(145deg, #071321d8, #0e1b2be4);
+      radial-gradient(circle at 69% 70%, #f5c67b3f 0, #0000 36%), linear-gradient(145deg, #071321d8, #0e1b2be4);
     border: 1px solid #93c7de5a;
     box-shadow:
       inset 0 0 58px #387ea63d,
@@ -70,6 +69,38 @@
       #000 50%,
       transparent 50.5%
     );
+  }
+
+  .fx-home-daylight-ambient-mask {
+    -webkit-mask: radial-gradient(
+      circle,
+      transparent calc(50% - var(--ring-band-width) - 1.9%),
+      rgb(0 0 0 / 0.18) calc(50% - var(--ring-band-width) + 0.6%),
+      rgb(0 0 0 / 0.56) calc(50% + (var(--ring-band-width) * 0.54)),
+      rgb(0 0 0 / 0.32) calc(50% + (var(--ring-band-width) * 1.42)),
+      transparent calc(50% + (var(--ring-band-width) * 2.6))
+    );
+    mask: radial-gradient(
+      circle,
+      transparent calc(50% - var(--ring-band-width) - 1.9%),
+      rgb(0 0 0 / 0.18) calc(50% - var(--ring-band-width) + 0.6%),
+      rgb(0 0 0 / 0.56) calc(50% + (var(--ring-band-width) * 0.54)),
+      rgb(0 0 0 / 0.32) calc(50% + (var(--ring-band-width) * 1.42)),
+      transparent calc(50% + (var(--ring-band-width) * 2.6))
+    );
+  }
+
+  .fx-home-daylight-ambient {
+    mix-blend-mode: screen;
+    opacity: 0.34;
+    filter: blur(clamp(48px, calc(var(--ring-size) * 0.084), 128px));
+    will-change: filter;
+  }
+
+  .fx-home-daylight-ambient-fill {
+    transform: scale(1.24);
+    transform-origin: 50% 50%;
+    filter: saturate(1.14) brightness(1.05);
   }
 
   .fx-home-hour-contrast-ring::before {
@@ -113,7 +144,6 @@
       linear-gradient(155deg, #3a4653f2, #2a3948e8),
       linear-gradient(120deg, color-mix(in srgb, var(--orbit-accent) 18%, #ffffff18), #0000);
   }
-
 }
 
 @keyframes home-center-copy-in {
@@ -150,11 +180,7 @@
 
 @media (max-width: 740px) {
   .fx-home-ring-vars {
-    --ring-size: min(
-      clamp(320px, var(--ring-size-mobile), 760px),
-      calc(100svh - 1.2rem),
-      calc(100vw - 1.2rem)
-    );
+    --ring-size: min(clamp(320px, var(--ring-size-mobile), 760px), calc(100svh - 1.2rem), calc(100vw - 1.2rem));
     --hour-contrast-ring-width: clamp(24px, calc(var(--ring-size) * 0.034), 40px);
   }
 }

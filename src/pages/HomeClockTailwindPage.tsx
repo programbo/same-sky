@@ -15,6 +15,7 @@ export function HomeClockTailwindPage() {
         wheelRotation={model.wheelRotation}
         isRingTransitioning={model.isRingTransitioning}
         displayedWheelGradient={model.displayedWheelGradient}
+        displayedNightMaskGradient={model.displayedNightMaskGradient}
       />
 
       <CenterReadout

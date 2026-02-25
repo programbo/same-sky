@@ -187,6 +187,7 @@ export interface HomeClockViewModel {
   isRingTransitioning: boolean
   areHourTicksVisible: boolean
   displayedWheelGradient: string
+  displayedNightMaskGradient: string
   wheelRotation: number
   orbitLabels: OrbitLabel[]
   orbitLabelGroups: OrbitLabelGroup[]
@@ -1178,6 +1179,18 @@ function buildConicGradient(stops: ConicGradientStop[]): string {
   return `conic-gradient(from 0deg, ${segments.join(", ")})`
 }
 
+function buildNightMaskGradient(stops: ConicGradientStop[]): string {
+  const normalizedStops = normalizeConicGradientStops(stops)
+  const segments = normalizedStops.map((stop) => {
+    const pct = Number(((stop.minute / 1440) * 100).toFixed(3))
+    const nightAlpha = clamp(1 - stop.alpha, 0, 1)
+    const level = Math.round(nightAlpha * 255)
+    return `rgba(${level}, ${level}, ${level}, ${nightAlpha}) ${pct}%`
+  })
+
+  return `conic-gradient(from 0deg, ${segments.join(", ")})`
+}
+
 function locationDisplayLabel(location: PersistedLocationApiResult): string {
   if ((location.kind ?? "location") === "entity") {
     return location.entityName?.trim() || location.nickname?.trim() || location.name
@@ -1338,6 +1351,9 @@ export function useHomeClockModel(): HomeClockViewModel {
   const [ringDiameter, setRingDiameter] = useState<number>(0)
   const [displayedWheelGradient, setDisplayedWheelGradient] = useState<string>(() =>
     buildConicGradient(DEFAULT_CONIC_GRADIENT_STOPS),
+  )
+  const [displayedNightMaskGradient, setDisplayedNightMaskGradient] = useState<string>(() =>
+    buildNightMaskGradient(DEFAULT_CONIC_GRADIENT_STOPS),
   )
   const [areHourTicksVisible, setAreHourTicksVisible] = useState<boolean>(() => prefersReducedMotion())
   const [gradientTransitionToken, setGradientTransitionToken] = useState<number>(0)
@@ -1831,6 +1847,7 @@ export function useHomeClockModel(): HomeClockViewModel {
       const normalizedTarget = normalizeConicGradientStops(wheelGradientStops)
       displayedWheelGradientStopsRef.current = cloneConicGradientStops(normalizedTarget)
       setDisplayedWheelGradient(buildConicGradient(normalizedTarget))
+      setDisplayedNightMaskGradient(buildNightMaskGradient(normalizedTarget))
       return
     }
 
@@ -1852,6 +1869,7 @@ export function useHomeClockModel(): HomeClockViewModel {
       )
       displayedWheelGradientStopsRef.current = frameStops
       setDisplayedWheelGradient(buildConicGradient(frameStops))
+      setDisplayedNightMaskGradient(buildNightMaskGradient(frameStops))
 
       if (progress >= 1) {
         gradientMorphRafRef.current = null
@@ -2152,6 +2170,7 @@ export function useHomeClockModel(): HomeClockViewModel {
     isRingTransitioning,
     areHourTicksVisible,
     displayedWheelGradient,
+    displayedNightMaskGradient,
     wheelRotation: displayWheelRotation,
     orbitLabels,
     orbitLabelGroups,
