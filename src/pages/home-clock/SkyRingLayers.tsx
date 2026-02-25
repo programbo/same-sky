@@ -22,6 +22,12 @@ export function SkyRingLayers({
     "absolute inset-0 z-[0] rounded-full pointer-events-none transition-transform ease-[var(--home-rotation-easing)] will-change-transform motion-reduce:transition-none fx-home-daylight-ambient-mask fx-home-daylight-ambient"
   const auroraClassName =
     "absolute inset-0 z-[1] rounded-full pointer-events-none transition-transform ease-[var(--home-rotation-easing)] will-change-transform motion-reduce:transition-none"
+  const rotationTransitionDuration = isRingTransitioning
+    ? "var(--home-rotation-switch-duration)"
+    : "var(--home-rotation-duration)"
+  const rotationTransitionEasing = isRingTransitioning
+    ? "var(--home-rotation-switch-easing)"
+    : "var(--home-rotation-easing)"
   const auroraMaskStyle: CSSProperties = {
     WebkitMaskImage: displayedNightMaskGradient,
     maskImage: displayedNightMaskGradient,
@@ -50,9 +56,8 @@ export function SkyRingLayers({
         className={daylightAmbientClassName}
         style={{
           transform: ringTransform,
-          transitionDuration: isRingTransitioning
-            ? "calc(var(--home-rotation-switch-duration) * 5)"
-            : "var(--home-rotation-duration)",
+          transitionDuration: rotationTransitionDuration,
+          transitionTimingFunction: rotationTransitionEasing,
         }}
         aria-hidden="true"
       >
@@ -67,9 +72,8 @@ export function SkyRingLayers({
         className={auroraClassName}
         style={{
           transform: ringTransform,
-          transitionDuration: isRingTransitioning
-            ? "calc(var(--home-rotation-switch-duration) * 5)"
-            : "var(--home-rotation-duration)",
+          transitionDuration: rotationTransitionDuration,
+          transitionTimingFunction: rotationTransitionEasing,
         }}
         aria-hidden="true"
       >
