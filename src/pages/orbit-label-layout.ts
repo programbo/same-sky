@@ -58,6 +58,7 @@ interface Rect {
 }
 
 type CornerKey = "top-left" | "top-right" | "bottom-left" | "bottom-right"
+const CORNER_AXIS_LEEWAY = 0.25
 
 interface CandidatePlacement {
   rect: Rect
@@ -203,27 +204,26 @@ function axisFlexibleCornerCandidates(normalX: number, normalY: number): CornerK
   const primary = hubFacingCorner(normalX, normalY)
   candidates.push(primary)
 
-  const axisLeeway = 0.38
   const horizontal: "left" | "right" = normalX >= 0 ? "left" : "right"
   const vertical: "top" | "bottom" = normalY >= 0 ? "top" : "bottom"
   const oppositeHorizontal: "left" | "right" = horizontal === "left" ? "right" : "left"
   const oppositeVertical: "top" | "bottom" = vertical === "top" ? "bottom" : "top"
 
-  if (Math.abs(normalX) <= axisLeeway) {
+  if (Math.abs(normalX) <= CORNER_AXIS_LEEWAY) {
     const alternateHorizontal = `${vertical}-${oppositeHorizontal}` as CornerKey
     if (!candidates.includes(alternateHorizontal)) {
       candidates.push(alternateHorizontal)
     }
   }
 
-  if (Math.abs(normalY) <= axisLeeway) {
+  if (Math.abs(normalY) <= CORNER_AXIS_LEEWAY) {
     const alternateVertical = `${oppositeVertical}-${horizontal}` as CornerKey
     if (!candidates.includes(alternateVertical)) {
       candidates.push(alternateVertical)
     }
   }
 
-  if (Math.abs(normalX) <= axisLeeway && Math.abs(normalY) <= axisLeeway) {
+  if (Math.abs(normalX) <= CORNER_AXIS_LEEWAY && Math.abs(normalY) <= CORNER_AXIS_LEEWAY) {
     const oppositeDiagonal = `${oppositeVertical}-${oppositeHorizontal}` as CornerKey
     if (!candidates.includes(oppositeDiagonal)) {
       candidates.push(oppositeDiagonal)

@@ -27,7 +27,7 @@ function expectedCornerInsetPointsByNormal(
 ): Array<{ x: number; y: number }> {
   const inset = Math.max(0, Math.min(cornerInset, rectWidth / 2, rectHeight / 2))
   const epsilon = 1e-6
-  const axisLeeway = 0.38
+  const axisLeeway = 0.25
   const normalizedX = Math.abs(normalX) <= epsilon ? 0 : normalX
   const normalizedY = Math.abs(normalY) <= epsilon ? 0 : normalY
   const horizontal: "left" | "right" = normalizedX >= 0 ? "left" : "right"

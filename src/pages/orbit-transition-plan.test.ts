@@ -229,6 +229,17 @@ function makeLayoutFromOrbitGeometry(selectedAngleDeg: number, otherAngleDeg: nu
   }))
 }
 
+function normalizeAngleDeltaRad(fromRad: number, toRad: number): number {
+  let delta = toRad - fromRad
+  while (delta > Math.PI) {
+    delta -= Math.PI * 2
+  }
+  while (delta < -Math.PI) {
+    delta += Math.PI * 2
+  }
+  return delta
+}
+
 describe("orbit transition planning", () => {
   test("creates deterministic plans for the same frozen input", () => {
     const fromLayouts = [makeLayout("a", 200, 100, true), makeLayout("b", 80, 210)]
@@ -351,7 +362,7 @@ describe("orbit transition planning", () => {
     expect(retargetStart.wheelRotationDeg).toBeCloseTo(midFrame.wheelRotationDeg, 5)
   })
 
-  test("non-selected cards follow ring sweep direction even when shortest arc is opposite", () => {
+  test("non-selected cards take the shortest arc even when ring sweep is opposite", () => {
     const center = 160
     const radius = 100
     const pointAt = (angleDeg: number) => {
@@ -389,7 +400,7 @@ describe("orbit transition planning", () => {
 
     const midAngle = Math.atan2((midOther?.y ?? 0) - center, (midOther?.x ?? 0) - center)
     const midAngleDeg = (midAngle * 180) / Math.PI
-    expect(Math.abs(midAngleDeg)).toBeLessThan(90)
+    expect(Math.abs(midAngleDeg)).toBeGreaterThan(120)
   })
 
   test("corner-swapping cards can override ring sweep when both anchors are non-default", () => {
@@ -425,7 +436,7 @@ describe("orbit transition planning", () => {
     expect(Math.abs(midAngleDeg)).toBeGreaterThan(120)
   })
 
-  test("selected spoke endpoints follow ring sweep direction when point deltas disagree with shortest arc", () => {
+  test("selected spoke endpoints take the shortest arc when ring sweep disagrees", () => {
     const center = 160
     const radius = 100
     const pointAt = (angleDeg: number) => {
@@ -477,7 +488,170 @@ describe("orbit transition planning", () => {
     const midSpokeAngle = Math.atan2((midSelected?.spokeEndY ?? 0) - center, (midSelected?.spokeEndX ?? 0) - center)
     const midSpokeAngleDeg = (midSpokeAngle * 180) / Math.PI
 
-    expect(Math.abs(midSpokeAngleDeg)).toBeLessThan(90)
+    expect(Math.abs(midSpokeAngleDeg)).toBeGreaterThan(120)
+  })
+
+  test("prefers anchor sweep when non-default corner spoke points imply opposite direction", () => {
+    const center = 160
+    const radius = 100
+    const pointAt = (angleDeg: number) => {
+      const theta = (angleDeg * Math.PI) / 180
+      return {
+        x: center + Math.cos(theta) * radius,
+        y: center + Math.sin(theta) * radius,
+      }
+    }
+
+    const fromAnchor = pointAt(-95)
+    const toAnchor = pointAt(-85)
+    const fromSpoke = pointAt(170)
+    const toSpoke = pointAt(-170)
+
+    const fromLayout: OrbitLabelLayout = {
+      ...makeLayout("other", fromAnchor.x - 60, fromAnchor.y - 24, false),
+      anchorX: fromAnchor.x,
+      anchorY: fromAnchor.y,
+      spokeEndX: fromSpoke.x,
+      spokeEndY: fromSpoke.y,
+    }
+    const toLayout: OrbitLabelLayout = {
+      ...makeLayout("other", toAnchor.x - 60, toAnchor.y - 24, false),
+      anchorX: toAnchor.x,
+      anchorY: toAnchor.y,
+      spokeEndX: toSpoke.x,
+      spokeEndY: toSpoke.y,
+    }
+
+    const plan = createOrbitTransitionPlan({
+      startedAtMs: 0,
+      durationMs: 780,
+      frozenNowMs: 1_700_000_002_500,
+      fromSelectionId: "sel-member",
+      toSelectionId: "sel-member",
+      fromRing: { wheelRotationDeg: 120 },
+      toRing: { wheelRotationDeg: 0 },
+      fromLayouts: [fromLayout],
+      toLayouts: [toLayout],
+      orbitSizePx: 320,
+      preferredSweepLayoutId: "other",
+    })
+
+    const mid = interpolateOrbitTransitionPlan(plan, 0.5)
+    const layout = mid.layout[0]
+    expect(layout).toBeDefined()
+
+    const midAnchorAngle = Math.atan2((layout?.anchorY ?? 0) - center, (layout?.anchorX ?? 0) - center) * (180 / Math.PI)
+    expect(midAnchorAngle).toBeGreaterThan(-110)
+    expect(midAnchorAngle).toBeLessThan(-70)
+  })
+
+  test("selected-to-non-selected transitions stay on the short center arc during a 0.5h switch", () => {
+    const orbitSizePx = 760
+    const center = orbitSizePx / 2
+    const baseGroups = [
+      { id: "tz10", baseAngleDeg: 0 },
+      { id: "tz105", baseAngleDeg: 7.5 },
+      { id: "a", baseAngleDeg: -30 },
+      { id: "b", baseAngleDeg: 22 },
+      { id: "c", baseAngleDeg: 85 },
+      { id: "d", baseAngleDeg: 115 },
+      { id: "e", baseAngleDeg: 180 },
+      { id: "f", baseAngleDeg: 250 },
+    ]
+    const mapRawLayout = (
+      raw: ReturnType<typeof computeOrbitLabelLayout>["labels"][number],
+      selectedId: string,
+    ): OrbitLabelLayout => ({
+      id: raw.id,
+      timezoneKey: raw.id,
+      side: raw.side,
+      x: raw.x,
+      y: raw.y,
+      width: raw.width,
+      height: raw.height,
+      anchorX: raw.anchorX,
+      anchorY: raw.anchorY,
+      spokeEndX: raw.spokeEndX,
+      spokeEndY: raw.spokeEndY,
+      spokePath: raw.spokePath,
+      branchPath: raw.branchPath,
+      time: "12:00:00",
+      timezoneMeta: "UTC+0",
+      relativeLabel: "same offset",
+      relativeOffsetMinutes: 0,
+      angleDeg: 0,
+      skyColorHex: "#88aacc",
+      isSelected: raw.id === selectedId,
+      isLocal: false,
+      memberCount: 1,
+      members: [
+        {
+          id: `${raw.id}-member`,
+          label: raw.id,
+          time: "12:00:00",
+          timezoneMeta: "UTC+0",
+          relativeLabel: "same offset",
+          leadingEmoji: "📍",
+          isSelected: raw.id === selectedId,
+        },
+      ],
+    })
+    const buildLayouts = (selectedId: "tz10" | "tz105"): OrbitLabelLayout[] => {
+      const selectedAnchorDeg = selectedId === "tz10" ? 0 : 7.5
+      const raw = computeOrbitLabelLayout(
+        baseGroups.map((group) => ({
+          id: group.id,
+          angleDeg: group.baseAngleDeg - selectedAnchorDeg,
+          isSelected: group.id === selectedId,
+          isLocal: false,
+          width: 220,
+          height: group.id === selectedId ? 52 : 46,
+        })),
+        {
+          frameWidth: orbitSizePx,
+          frameHeight: orbitSizePx,
+          ringDiameter: orbitSizePx,
+          isMobile: false,
+        },
+      ).labels
+
+      return raw.map((layout) => mapRawLayout(layout, selectedId))
+    }
+    const centerAngle = (layout: OrbitLabelLayout): number =>
+      Math.atan2(layout.y + layout.height / 2 - center, layout.x + layout.width / 2 - center)
+
+    const fromLayouts = buildLayouts("tz10")
+    const toLayouts = buildLayouts("tz105")
+    const plan = createOrbitTransitionPlan({
+      startedAtMs: 0,
+      durationMs: 780,
+      frozenNowMs: 1_700_000_004_000,
+      fromSelectionId: "tz10-member",
+      toSelectionId: "tz105-member",
+      fromRing: { wheelRotationDeg: 120 },
+      toRing: { wheelRotationDeg: 0 },
+      fromLayouts,
+      toLayouts,
+      orbitSizePx,
+      preferredSweepLayoutId: "tz105",
+    })
+
+    const source = fromLayouts.find((layout) => layout.id === "tz10")
+    const target = toLayouts.find((layout) => layout.id === "tz10")
+    const mid = interpolateOrbitTransitionPlan(plan, 0.5).layout.find((layout) => layout.id === "tz10")
+    expect(source).toBeDefined()
+    expect(target).toBeDefined()
+    expect(mid).toBeDefined()
+    if (!source || !target || !mid) {
+      return
+    }
+
+    const totalDelta = normalizeAngleDeltaRad(centerAngle(source), centerAngle(target))
+    const midDelta = normalizeAngleDeltaRad(centerAngle(source), centerAngle(mid))
+
+    expect(Math.sign(midDelta)).toBe(Math.sign(totalDelta))
+    expect(Math.abs(midDelta)).toBeLessThan(Math.abs(totalDelta) + 0.01)
+    expect(Math.abs(midDelta / totalDelta - 0.5)).toBeLessThan(0.25)
   })
 
   test("keeps selected spoke endpoint attached to card during large sweeps", () => {

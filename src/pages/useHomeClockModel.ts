@@ -370,7 +370,11 @@ function interpolateOrbitPoint(
   const toAngle = Math.atan2(toY, toX)
   let deltaAngle = normalizeAngleDeltaRad(fromAngle, toAngle)
   if (direction !== 0 && Math.sign(deltaAngle) !== 0 && Math.sign(deltaAngle) !== direction) {
-    deltaAngle += direction > 0 ? Math.PI * 2 : -Math.PI * 2
+    const directedDelta = deltaAngle + (direction > 0 ? Math.PI * 2 : -Math.PI * 2)
+    // Never allow direction hints to turn a short orbit into a long-way-around sweep.
+    if (Math.abs(directedDelta) <= Math.PI + 1e-6) {
+      deltaAngle = directedDelta
+    }
   }
 
   const angle = fromAngle + deltaAngle * progress
@@ -445,6 +449,32 @@ function resolveLayoutSweepDirection(
   centerY: number,
   defaultDirection: number,
 ): number {
+  const anchorDirection = directionFromOrbitPoints(
+    source.anchorX,
+    source.anchorY,
+    target.anchorX,
+    target.anchorY,
+    centerX,
+    centerY,
+  )
+  if (anchorDirection !== 0) {
+    return anchorDirection
+  }
+
+  const sourcePoint = layoutOrbitReferencePoint(source)
+  const targetPoint = layoutOrbitReferencePoint(target)
+  const shortestDirection = directionFromOrbitPoints(
+    sourcePoint.x,
+    sourcePoint.y,
+    targetPoint.x,
+    targetPoint.y,
+    centerX,
+    centerY,
+  )
+  if (shortestDirection !== 0) {
+    return shortestDirection
+  }
+
   if (!shouldAllowCornerSwitchSweepOverride(source, target, centerX, centerY)) {
     return defaultDirection
   }
@@ -453,7 +483,7 @@ function resolveLayoutSweepDirection(
   const sourceCenterY = source.y + source.height / 2
   const targetCenterX = target.x + target.width / 2
   const targetCenterY = target.y + target.height / 2
-  const shortestDirection = directionFromOrbitPoints(
+  const centerDirection = directionFromOrbitPoints(
     sourceCenterX,
     sourceCenterY,
     targetCenterX,
@@ -461,7 +491,7 @@ function resolveLayoutSweepDirection(
     centerX,
     centerY,
   )
-  return shortestDirection === 0 ? defaultDirection : shortestDirection
+  return centerDirection === 0 ? defaultDirection : centerDirection
 }
 
 function buildSpokePath(startX: number, startY: number, endX: number, endY: number): string {
@@ -606,18 +636,26 @@ export function interpolateOrbitTransitionPlan(plan: OrbitTransitionPlan, progre
       }
 
       const layoutSweepDirection = resolveLayoutSweepDirection(source, target, centerX, centerY, plan.sweepDirection)
-      const framePosition = interpolateOrbitPoint(
-        source.x,
-        source.y,
-        target.x,
-        target.y,
+      const frameWidth = lerpNumber(source.width, target.width, t)
+      const frameHeight = lerpNumber(source.height, target.height, t)
+      const sourceCenterX = source.x + source.width / 2
+      const sourceCenterY = source.y + source.height / 2
+      const targetCenterX = target.x + target.width / 2
+      const targetCenterY = target.y + target.height / 2
+      const frameCenter = interpolateOrbitPoint(
+        sourceCenterX,
+        sourceCenterY,
+        targetCenterX,
+        targetCenterY,
         centerX,
         centerY,
         layoutSweepDirection,
         t,
       )
-      const frameWidth = lerpNumber(source.width, target.width, t)
-      const frameHeight = lerpNumber(source.height, target.height, t)
+      const framePosition = {
+        x: frameCenter.x - frameWidth / 2,
+        y: frameCenter.y - frameHeight / 2,
+      }
       const frameAnchor = interpolateOrbitPoint(
         source.anchorX,
         source.anchorY,
@@ -625,7 +663,7 @@ export function interpolateOrbitTransitionPlan(plan: OrbitTransitionPlan, progre
         target.anchorY,
         centerX,
         centerY,
-        plan.sweepDirection,
+        layoutSweepDirection,
         t,
       )
       const orbitInterpolatedSpokeEnd = interpolateOrbitPoint(
@@ -635,7 +673,7 @@ export function interpolateOrbitTransitionPlan(plan: OrbitTransitionPlan, progre
         target.spokeEndY,
         centerX,
         centerY,
-        plan.sweepDirection,
+        layoutSweepDirection,
         t,
       )
       const sourceSpokeAttached = isPointWithinLayoutRect(source, source.spokeEndX, source.spokeEndY)
