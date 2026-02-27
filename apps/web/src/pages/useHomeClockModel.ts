@@ -870,6 +870,62 @@ function formatTimezoneMeta(timeZone: string | undefined, atMs: number): string 
   return `UTC${formatUtcOffset(offsetMinutes)}`
 }
 
+interface MilitaryOffsetHeading {
+  phonetic: string
+  letter: string
+}
+
+const MILITARY_OFFSET_HEADINGS: Record<number, MilitaryOffsetHeading> = {
+  [-12]: { phonetic: "Yankee", letter: "Y" },
+  [-11]: { phonetic: "X-ray", letter: "X" },
+  [-10]: { phonetic: "Whiskey", letter: "W" },
+  [-9]: { phonetic: "Victor", letter: "V" },
+  [-8]: { phonetic: "Uniform", letter: "U" },
+  [-7]: { phonetic: "Tango", letter: "T" },
+  [-6]: { phonetic: "Sierra", letter: "S" },
+  [-5]: { phonetic: "Romeo", letter: "R" },
+  [-4]: { phonetic: "Quebec", letter: "Q" },
+  [-3]: { phonetic: "Papa", letter: "P" },
+  [-2]: { phonetic: "Oscar", letter: "O" },
+  [-1]: { phonetic: "November", letter: "N" },
+  [0]: { phonetic: "Zulu", letter: "Z" },
+  [1]: { phonetic: "Alfa", letter: "A" },
+  [2]: { phonetic: "Bravo", letter: "B" },
+  [3]: { phonetic: "Charlie", letter: "C" },
+  [4]: { phonetic: "Delta", letter: "D" },
+  [5]: { phonetic: "Echo", letter: "E" },
+  [6]: { phonetic: "Foxtrot", letter: "F" },
+  [7]: { phonetic: "Golf", letter: "G" },
+  [8]: { phonetic: "Hotel", letter: "H" },
+  [9]: { phonetic: "India", letter: "I" },
+  [10]: { phonetic: "Kilo", letter: "K" },
+  [11]: { phonetic: "Lima", letter: "L" },
+  [12]: { phonetic: "Mike", letter: "M" },
+}
+
+function parseOffsetMinutesFromTimezoneKey(timezoneKey: string): number | null {
+  if (!timezoneKey.startsWith("offset:")) {
+    return null
+  }
+
+  const parsed = Number(timezoneKey.slice("offset:".length))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function formatFloatingCardHeading(offsetMinutes: number): string {
+  if (offsetMinutes % 60 !== 0) {
+    return `UTC${formatUtcOffset(offsetMinutes)}`
+  }
+
+  const wholeHourOffset = offsetMinutes / 60
+  const heading = MILITARY_OFFSET_HEADINGS[wholeHourOffset]
+  if (!heading) {
+    return `UTC${formatUtcOffset(offsetMinutes)}`
+  }
+
+  return `${heading.phonetic} (${heading.letter}) · UTC${formatUtcOffset(offsetMinutes)}`
+}
+
 function formatRelativeOffsetLabel(deltaMinutes: number): string {
   if (deltaMinutes === 0) {
     return "same offset"
@@ -1616,13 +1672,14 @@ export function useHomeClockModel(): HomeClockViewModel {
         }
 
         const memberCount = members.length
+        const offsetMinutes = parseOffsetMinutesFromTimezoneKey(timezoneKey)
 
         return {
           id: `tz-${timezoneKey}`,
           timezoneKey,
           time: primary.time,
           shortDateTime24: primary.shortDateTime24,
-          timezoneMeta: primary.timezoneMeta,
+          timezoneMeta: offsetMinutes === null ? primary.timezoneMeta : formatFloatingCardHeading(offsetMinutes),
           relativeLabel: primary.relativeLabel,
           relativeOffsetMinutes: primary.relativeOffsetMinutes,
           localRelativeOffsetMinutes: primary.localRelativeOffsetMinutes,
