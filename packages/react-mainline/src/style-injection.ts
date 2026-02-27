@@ -9,12 +9,12 @@ const MAINLINE_STYLES = `
 @keyframes react-mainline-panel-in {
   from {
     opacity: 0;
-    transform: translate(-50%, 10px) scale(0.98);
+    transform: translateY(10px) scale(0.98);
   }
 
   to {
     opacity: 1;
-    transform: translate(-50%, 0) scale(1);
+    transform: translateY(0) scale(1);
   }
 }
 
