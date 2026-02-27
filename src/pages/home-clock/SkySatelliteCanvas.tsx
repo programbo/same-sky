@@ -131,12 +131,7 @@ function createLeoSatellites(count: number, width: number, height: number): LeoS
   })
 }
 
-function pushTrainParticles(
-  particles: TrainParticle[],
-  config: TrainConfig,
-  width: number,
-  nowMs: number,
-): void {
+function pushTrainParticles(particles: TrainParticle[], config: TrainConfig, width: number, nowMs: number): void {
   const pad = 34
   const directionX = Math.cos(config.angleRad)
   const directionY = Math.sin(config.angleRad)
@@ -173,7 +168,8 @@ export function SkySatelliteCanvas() {
       return
     }
 
-    const motionQuery = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null
+    const motionQuery =
+      typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null
     const reduceMotion = motionQuery?.matches ?? false
 
     let width = 1
@@ -284,10 +280,18 @@ export function SkySatelliteCanvas() {
 
         if (particle.x > width + wrapPadding) {
           particle.x = -wrapPadding
-          particle.y = wrap(particle.y + randomBetween(-height * 0.18, height * 0.18), -wrapPadding, height + wrapPadding)
+          particle.y = wrap(
+            particle.y + randomBetween(-height * 0.18, height * 0.18),
+            -wrapPadding,
+            height + wrapPadding,
+          )
         } else if (particle.x < -wrapPadding) {
           particle.x = width + wrapPadding
-          particle.y = wrap(particle.y + randomBetween(-height * 0.18, height * 0.18), -wrapPadding, height + wrapPadding)
+          particle.y = wrap(
+            particle.y + randomBetween(-height * 0.18, height * 0.18),
+            -wrapPadding,
+            height + wrapPadding,
+          )
         }
 
         if (particle.y > height + wrapPadding) {
@@ -300,7 +304,8 @@ export function SkySatelliteCanvas() {
       const deltaSeconds = FRAME_INTERVAL_MS / 1000
       for (const particle of leoSatellites) {
         const wobbleX = Math.sin(seconds * particle.wobbleSpeed + particle.wobblePhase) * particle.wobbleAmplitude
-        const wobbleY = Math.cos(seconds * (particle.wobbleSpeed * 0.78) + particle.wobblePhase) * particle.wobbleAmplitude * 0.46
+        const wobbleY =
+          Math.cos(seconds * (particle.wobbleSpeed * 0.78) + particle.wobblePhase) * particle.wobbleAmplitude * 0.46
         particle.x += (particle.vx + wobbleX) * deltaSeconds
         particle.y += (particle.vy + wobbleY) * deltaSeconds
 
@@ -406,7 +411,7 @@ export function SkySatelliteCanvas() {
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 z-[1] h-full w-full pointer-events-none mix-blend-screen"
+      className="absolute inset-0 z-1 h-full w-full pointer-events-none mix-blend-screen"
       aria-hidden="true"
     />
   )
