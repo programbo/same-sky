@@ -24,7 +24,9 @@ function useOrbitFocusActor(): {
     actorRef.current = createActor(orbitFocusMachine)
   }
 
-  const [snapshot, setSnapshot] = useState<SnapshotFrom<typeof orbitFocusMachine>>(() => actorRef.current!.getSnapshot())
+  const [snapshot, setSnapshot] = useState<SnapshotFrom<typeof orbitFocusMachine>>(() =>
+    actorRef.current!.getSnapshot(),
+  )
 
   useEffect(() => {
     const actor = actorRef.current!
@@ -190,7 +192,7 @@ export function OrbitLabelSystem({
 
   return (
     <div
-      className="pointer-events-none absolute inset-0 z-[14] overflow-visible"
+      className="pointer-events-none absolute inset-0 z-14 overflow-visible"
       onFocusCapture={onFocusCapture}
       onBlurCapture={onBlurCapture}
       onKeyDownCapture={(event) => {
@@ -202,7 +204,7 @@ export function OrbitLabelSystem({
       role="region"
       aria-label="Saved locations by 24 hour offset"
     >
-      <div className="pointer-events-none absolute inset-0 z-[8] overflow-visible" aria-hidden="true">
+      <div className="pointer-events-none absolute inset-0 z-8 overflow-visible" aria-hidden="true">
         {orderedLayouts.map((label, index) => {
           const dx = label.spokeEndX - label.anchorX
           const dy = label.spokeEndY - label.anchorY
@@ -211,7 +213,7 @@ export function OrbitLabelSystem({
           return (
             <span
               key={`${label.id}-leader`}
-              className="pointer-events-none absolute left-0 top-0 block overflow-visible [transform-origin:0_50%]"
+              className="pointer-events-none absolute left-0 top-0 block overflow-visible origin-[0_50%]"
               style={{
                 width: `${length}px`,
                 transform: `translate(${label.anchorX}px, ${label.anchorY}px) rotate(${angleDeg}deg) translateY(-50%)`,
@@ -255,7 +257,10 @@ export function OrbitLabelSystem({
           <Group
             key={label.id}
             data-orbit-card-id={label.id}
-            className={cn(orbitLabel({ side: label.side, switching: isRingTransitioning }), cardIsSelected ? "z-[18]" : "z-[10]")}
+            className={cn(
+              orbitLabel({ side: label.side, switching: isRingTransitioning }),
+              cardIsSelected ? "z-18" : "z-10",
+            )}
             style={{
               transform: `translate(${label.x}px, ${label.y}px)`,
               width: `${label.width}px`,
@@ -328,20 +333,20 @@ export function OrbitLabelSystem({
                           send({ type: "MEMBER_FOCUSED", cardId: label.id, memberIndex })
                         }}
                         onKeyDown={(event) => onMemberKeyDown(event, label.id, memberIndex)}
-                        title={`${member.label} · ${member.time} (${member.relativeLabel})`}
-                        tabIndex={-1}
+                        // title={`${member.label} · ${member.time} (${member.relativeLabel})`}
+                        // tabIndex={-1}
                         ref={(node) => {
                           const list = memberRefs.current.get(label.id) ?? []
                           list[memberIndex] = node
                           memberRefs.current.set(label.id, list)
                         }}
                       >
-                        <span className="relative z-[1] text-[1.12rem] leading-none" aria-hidden="true">
+                        <span className="relative z-1 text-[1.12rem] leading-none" aria-hidden="true">
                           {member.leadingEmoji}
                         </span>
                         <span
                           className={cn(
-                            "relative z-[1] break-words font-body text-[0.96rem] font-light leading-[1.18] tracking-[0.018em] [overflow-wrap:anywhere] [word-break:break-word] [font-synthesis:none]",
+                            "relative z-1 wrap-break-word font-body text-[0.96rem] font-light leading-[1.18] tracking-[0.018em] [word-break:break-word] [font-synthesis:none]",
                             isMemberSelected ? "text-[#ffd89d]" : "text-[#f5fbff]",
                           )}
                         >
@@ -354,21 +359,21 @@ export function OrbitLabelSystem({
 
                 <strong className="order-3 block min-w-0 whitespace-nowrap px-[calc(var(--orbit-row-pad-x)+var(--orbit-icon-col)+var(--orbit-row-gap))] pb-[0.44rem] pt-[0.14rem] font-body text-[0.8rem] leading-[1.2] tracking-[0.025em] text-[#f0f8ff] max-[900px]:text-[0.76rem]">
                   {cardIsSelected ? (
-                    <span className="font-bold text-white [font-feature-settings:'lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]">
+                    <span className="font-bold text-white font-features-['lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]">
                       {footerDateTime} · Now
                     </span>
                   ) : (
                     <>
-                      <span className="font-bold text-white [font-feature-settings:'lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]">
+                      <span className="font-bold text-white font-features-['lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]">
                         {footerDateTime} · {footerRelativeSign}
                       </span>
                       <NumberFlow
-                        className="font-bold text-white [font-feature-settings:'lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]"
+                        className="font-bold text-white font-features-['lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]"
                         value={footerRelativeHours}
                         plugins={NUMBER_FLOW_PLUGINS}
                         format={{ minimumFractionDigits: 1, maximumFractionDigits: 2, useGrouping: false }}
                       />
-                      <span className="font-bold text-white [font-feature-settings:'lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]">
+                      <span className="font-bold text-white font-features-['lnum'_1,'tnum'_1] [font-variant-numeric:lining-nums_tabular-nums]">
                         h
                       </span>
                     </>
