@@ -23,7 +23,8 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "react-mainline": ["../../packages/react-mainline/src/index.ts"]
     },
 
     // Some stricter flags (disabled by default)

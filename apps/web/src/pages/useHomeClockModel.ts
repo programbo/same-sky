@@ -1,6 +1,5 @@
 import type React from "react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { continuous } from "number-flow/plugins"
 import { computeSky24h } from "../lib/same-sky/sky"
 import { computeOrbitLabelLayout } from "./orbit-label-layout"
 import type {
@@ -10,7 +9,7 @@ import type {
 
 type PersistedKind = "location" | "entity"
 
-interface PersistedLocationApiResult {
+export interface PersistedLocationApiResult {
   id: string
   name: string
   lat: number
@@ -195,7 +194,16 @@ export interface HomeClockViewModel {
   orbitLabelLayout: OrbitLabelLayout[]
   ringDiameter: number
   labelOrbitSizePx: number
+  savedLocations: PersistedLocationApiResult[]
+  hasLoadedSavedLocations: boolean
+  selectedId: string | null
+  reloadSavedLocations: () => Promise<void>
   setSelectedId: React.Dispatch<React.SetStateAction<string | null>>
+}
+
+export interface HomeClockModelOptions {
+  secondOrderEnabled?: boolean
+  visibleLocationIds?: readonly string[]
 }
 
 const STORAGE_SELECTED_ID = "same_sky_home_selected_item_id"
@@ -221,7 +229,7 @@ const DEFAULT_CONIC_GRADIENT_STOPS: ConicGradientStop[] = [
   { minute: DEFAULT_NOON_MINUTE, colorHex: "#081521", alpha: 0 },
   { minute: 1440, colorHex: "#081521", alpha: 0 },
 ]
-export const NUMBER_FLOW_PLUGINS = [continuous]
+export const NUMBER_FLOW_PLUGINS: any[] = []
 const CLIENT_BASELINE_FACTORS: SharedSkySecondOrderFactors = {
   altitude: 0,
   turbidity: 0.5,
@@ -1381,8 +1389,18 @@ function measureGroupedLabelWidth(group: OrbitLabelGroup, isMobile: boolean): nu
   return Math.ceil(chipPadLeftPx + Math.max(widestEntityRow, metaWidth) + chipPadRightPx + safetyBufferPx)
 }
 
-export function useHomeClockModel(): HomeClockViewModel {
+export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeClockViewModel {
+  const secondOrderEnabled = options.secondOrderEnabled ?? false
+  const visibleLocationIdSet = useMemo(() => {
+    if (!options.visibleLocationIds) {
+      return null
+    }
+
+    return new Set(options.visibleLocationIds)
+  }, [options.visibleLocationIds])
+
   const [savedLocations, setSavedLocations] = useState<PersistedLocationApiResult[]>([])
+  const [hasLoadedSavedLocations, setHasLoadedSavedLocations] = useState<boolean>(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sky, setSky] = useState<Sky24hResult | null>(null)
   const [clockNowMs, setClockNowMs] = useState<number>(() => Date.now())
@@ -1425,8 +1443,16 @@ export function useHomeClockModel(): HomeClockViewModel {
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const localOffsetMinutes = -new Date(clockNowMs).getTimezoneOffset()
 
+  const visibleLocations = useMemo(() => {
+    if (!visibleLocationIdSet) {
+      return savedLocations
+    }
+
+    return savedLocations.filter((location) => visibleLocationIdSet.has(location.id))
+  }, [savedLocations, visibleLocationIdSet])
+
   const sortedLocations = useMemo(() => {
-    return [...savedLocations].sort((left, right) => {
+    return [...visibleLocations].sort((left, right) => {
       const leftOffset = left.timezone ? getTimeZoneOffsetMinutes(left.timezone, clockNowMs) : null
       const rightOffset = right.timezone ? getTimeZoneOffsetMinutes(right.timezone, clockNowMs) : null
 
@@ -1442,15 +1468,15 @@ export function useHomeClockModel(): HomeClockViewModel {
 
       return sortByLabel(left, right)
     })
-  }, [savedLocations, clockNowMs, localOffsetMinutes])
+  }, [visibleLocations, clockNowMs, localOffsetMinutes])
 
   const selectedLocation = useMemo(() => {
     if (!selectedId) {
       return null
     }
 
-    return savedLocations.find((location) => location.id === selectedId) ?? null
-  }, [savedLocations, selectedId])
+    return visibleLocations.find((location) => location.id === selectedId) ?? null
+  }, [visibleLocations, selectedId])
 
   const selectedTimezone = selectedLocation?.timezone ?? browserTimezone
   const selectedOffset = selectedTimezone ? getTimeZoneOffsetMinutes(selectedTimezone, clockNowMs) : localOffsetMinutes
@@ -1934,6 +1960,8 @@ export function useHomeClockModel(): HomeClockViewModel {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setRingError(message)
+    } finally {
+      setHasLoadedSavedLocations(true)
     }
   }, [])
 
@@ -2067,13 +2095,13 @@ export function useHomeClockModel(): HomeClockViewModel {
   }, [])
 
   useEffect(() => {
-    if (selectedId && savedLocations.some((location) => location.id === selectedId)) {
+    if (selectedId && visibleLocations.some((location) => location.id === selectedId)) {
       return
     }
 
     const fallback = sortedLocations[0]?.id ?? null
     setSelectedId(fallback)
-  }, [selectedId, savedLocations, sortedLocations])
+  }, [selectedId, visibleLocations, sortedLocations])
 
   useEffect(() => {
     if (!selectedId) {
@@ -2104,7 +2132,7 @@ export function useHomeClockModel(): HomeClockViewModel {
         createClientBaselineEnvironment(previewTimezone),
         previewAtMs,
         {
-          applySecondOrder: false,
+          applySecondOrder: secondOrderEnabled,
         },
       )
 
@@ -2127,7 +2155,7 @@ export function useHomeClockModel(): HomeClockViewModel {
         const url = new URL("/api/location/sky-24h", window.location.origin)
         url.searchParams.set("lat", String(selectedLocation.lat))
         url.searchParams.set("long", String(selectedLocation.long))
-        url.searchParams.set("secondOrder", "0")
+        url.searchParams.set("secondOrder", secondOrderEnabled ? "1" : "0")
         if (atMs !== undefined) {
           url.searchParams.set("at", String(atMs))
         }
@@ -2169,7 +2197,7 @@ export function useHomeClockModel(): HomeClockViewModel {
       cancelled = true
       clearInterval(timer)
     }
-  }, [selectedLocation, browserTimezone])
+  }, [selectedLocation, browserTimezone, secondOrderEnabled])
 
   useEffect(() => {
     return () => {
@@ -2217,6 +2245,10 @@ export function useHomeClockModel(): HomeClockViewModel {
     orbitLabelLayout: displayOrbitLabelLayout.length > 0 ? displayOrbitLabelLayout : orbitLabelLayout,
     ringDiameter,
     labelOrbitSizePx,
+    savedLocations,
+    hasLoadedSavedLocations,
+    selectedId,
+    reloadSavedLocations: loadSavedLocations,
     setSelectedId,
   }
 }

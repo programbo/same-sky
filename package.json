@@ -1,34 +1,18 @@
 {
-  "name": "same-sky",
+  "name": "same-sky-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "bun --hot src/index.ts",
-    "start": "NODE_ENV=production bun src/index.ts",
-    "build": "bun run build.ts",
-    "test": "bun test",
-    "test:visual": "playwright test",
-    "test:visual:update": "playwright test --update-snapshots",
-    "tui": "bun src/location-tui.ts"
-  },
-  "dependencies": {
-    "@inquirer/prompts": "^8.2.1",
-    "@number-flow/react": "^0.5.12",
-    "bun-plugin-tailwind": "^0.1.2",
-    "motion": "^12.34.3",
-    "react": "^19",
-    "react-aria-components": "^1.15.1",
-    "react-dom": "^19",
-    "tailwindcss": "^4.1.11",
-    "xstate": "^5.28.0"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "@types/bun": "latest",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "tailwind-merge": "^3.5.0",
-    "tailwind-variants": "^3.2.2"
+    "dev": "bun run --parallel --workspaces --if-present dev",
+    "build": "bun run --workspaces --if-present build",
+    "test": "bun run --workspaces --if-present test",
+    "test:visual": "bun run --filter @same-sky/web test:visual",
+    "test:visual:update": "bun run --filter @same-sky/web test:visual:update",
+    "tui": "bun run --filter @same-sky/web tui"
   }
 }
