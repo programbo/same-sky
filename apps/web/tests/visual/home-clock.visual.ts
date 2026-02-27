@@ -187,3 +187,25 @@ test("sky error state", async ({ page }) => {
 
   await expect(page).toHaveScreenshot("home-clock-desktop-error-state.png", { fullPage: true })
 })
+
+test("command palette opens from trigger button", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1024 })
+  await mockApi(page)
+
+  await page.goto("/")
+  await page.getByRole("button", { name: /Command/i }).click()
+  await expect(page.getByRole("heading", { name: "react-mainline" })).toBeVisible()
+
+  await expect(page).toHaveScreenshot("home-clock-desktop-command-palette-open.png", { fullPage: true })
+})
+
+test("command palette opens from keyboard shortcut", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1024 })
+  await mockApi(page)
+
+  await page.goto("/")
+  await page.keyboard.press("Control+K")
+  await expect(page.getByRole("heading", { name: "react-mainline" })).toBeVisible()
+
+  await expect(page).toHaveScreenshot("home-clock-desktop-command-palette-hotkey-open.png", { fullPage: true })
+})

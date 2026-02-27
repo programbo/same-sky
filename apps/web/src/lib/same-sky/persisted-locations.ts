@@ -276,11 +276,32 @@ function rowToPersistedLocation(row: PersistedLocationRow): PersistedLocation {
   };
 }
 
+function resolveDefaultDataDirectory(): string {
+  const configured = process.env.SAME_SKY_DATA_DIR?.trim();
+  if (configured) {
+    return path.resolve(configured);
+  }
+
+  const cwd = process.cwd();
+  const direct = path.join(cwd, "data");
+  if (existsSync(direct)) {
+    return direct;
+  }
+
+  const normalizedCwd = path.normalize(cwd);
+  const workspaceSuffix = path.normalize(path.join("apps", "web"));
+  if (normalizedCwd.endsWith(workspaceSuffix)) {
+    return path.resolve(cwd, "..", "..", "data");
+  }
+
+  return direct;
+}
+
 export class PersistedLocationStore implements PersistedLocationStoreLike {
   private readonly db: Database;
 
   constructor(
-    private readonly dbPath = path.join(process.cwd(), "data", "persisted-locations.db"),
+    private readonly dbPath = path.join(resolveDefaultDataDirectory(), "persisted-locations.db"),
     private readonly now: () => number = Date.now,
     private readonly legacyJsonPath = path.join(path.dirname(dbPath), "persisted-locations.json"),
   ) {

@@ -133,7 +133,7 @@ export function OrbitLabelSystem({ orbitLabelLayout, isRingTransitioning, setSel
                         onPress={() => {
                           setSelectedId(member.id)
                         }}
-                        title={`${member.label} · ${member.time} (${member.relativeLabel})`}
+                        aria-label={`${member.label} · ${member.time} (${member.relativeLabel})`}
                       >
                         <Text elementType="span" className="relative z-[1] text-[1.12rem] leading-none" aria-hidden="true">
                           {member.leadingEmoji}
