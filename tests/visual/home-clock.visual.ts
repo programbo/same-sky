@@ -162,10 +162,57 @@ test("selection interaction state", async ({ page }) => {
   await mockApi(page)
 
   await page.goto("/")
-  await expect(page.getByRole("button", { name: "Tokyo" })).toBeVisible()
-
-  await page.getByRole("button", { name: "Tokyo" }).click()
+  await expect(page.locator('[data-orbit-member-id="loc-tok"]')).toBeVisible()
+  await page.locator('[data-orbit-member-id="loc-tok"]').click({ force: true })
   await expect(page).toHaveScreenshot("home-clock-desktop-selection-change.png", { fullPage: true })
+})
+
+test("card-first keyboard navigation with explicit select", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1024 })
+  await mockApi(page)
+
+  await page.goto("/")
+  await expect(page.locator('[data-orbit-member-id="loc-nyc"]')).toBeVisible()
+  await expect(page.locator('[data-orbit-card-focus-id]')).toHaveCount(3)
+
+  const chooser = page.getByRole("region", { name: "Saved locations by 24 hour offset" })
+  await expect(chooser).toBeVisible()
+
+  const selectedBeforeArrow = await page.locator('[data-orbit-member-selected="true"]').getAttribute("data-orbit-member-id")
+
+  await page.keyboard.press("Tab")
+  await expect(page.locator('[data-orbit-card-focus-id]:focus')).toHaveCount(1)
+
+  await page.keyboard.press("Enter")
+  await expect(page.locator('[data-orbit-member-button]:focus')).toHaveCount(1)
+
+  await page.keyboard.press("ArrowDown")
+  await expect(page.locator('[data-orbit-member-button]:focus')).toHaveCount(1)
+  const selectedAfterArrow = await page.locator('[data-orbit-member-selected="true"]').getAttribute("data-orbit-member-id")
+  expect(selectedAfterArrow).toBe(selectedBeforeArrow)
+
+  await page.keyboard.press("Escape")
+  await expect(page.locator('[data-orbit-card-focus-id]:focus')).toHaveCount(1)
+
+  await page.locator('[data-orbit-card-focus-id]').nth(1).focus()
+  await expect(page.locator('[data-orbit-card-focus-id]:focus')).toHaveCount(1)
+  await page.keyboard.press("Enter")
+  await expect(page.locator('[data-orbit-member-button]:focus')).toHaveCount(1)
+  const focusedSecondCardMember = await page.locator('[data-orbit-member-button]:focus').getAttribute("data-orbit-member-id")
+  await page.keyboard.press(" ")
+  const selectedAfterSpace = await page.locator('[data-orbit-member-selected="true"]').getAttribute("data-orbit-member-id")
+  expect(selectedAfterSpace).toBe(focusedSecondCardMember)
+  expect(selectedAfterSpace).not.toBe(selectedBeforeArrow)
+})
+
+test("pointer entry does not auto-show keyboard help toast", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1024 })
+  await mockApi(page)
+
+  await page.goto("/")
+  await page.mouse.click(20, 20)
+  await page.locator('[data-orbit-member-id="loc-lon"]').click({ force: true })
+  await expect(page.getByText("Keyboard navigation")).toHaveCount(0)
 })
 
 test("empty state", async ({ page }) => {

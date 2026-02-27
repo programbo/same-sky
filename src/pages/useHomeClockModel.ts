@@ -189,6 +189,7 @@ export interface HomeClockViewModel {
   displayedWheelGradient: string
   displayedNightMaskGradient: string
   wheelRotation: number
+  selectedId: string | null
   orbitLabels: OrbitLabel[]
   orbitLabelGroups: OrbitLabelGroup[]
   orbitLabelLayout: OrbitLabelLayout[]
@@ -2210,6 +2211,7 @@ export function useHomeClockModel(): HomeClockViewModel {
     displayedWheelGradient,
     displayedNightMaskGradient,
     wheelRotation: displayWheelRotation,
+    selectedId,
     orbitLabels,
     orbitLabelGroups,
     orbitLabelLayout: displayOrbitLabelLayout.length > 0 ? displayOrbitLabelLayout : orbitLabelLayout,
