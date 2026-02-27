@@ -313,7 +313,16 @@ test("command palette opens from keyboard shortcut", async ({ page }) => {
   await mockApi(page);
 
   await page.goto("/");
-  await page.keyboard.press("Control+K");
+  await page.evaluate(() => {
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "k",
+        metaKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
   await expect(
     page.getByRole("heading", { name: "react-mainline" }),
   ).toBeVisible();
