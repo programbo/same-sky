@@ -22,8 +22,7 @@ interface TrainParticle {
   lifetimeMs: number
 }
 
-interface PendingTrain {
-  spawnAtMs: number
+interface TrainConfig {
   angleRad: number
   speedPxPerSecond: number
   spacingPx: number
@@ -31,11 +30,28 @@ interface PendingTrain {
   count: number
 }
 
+interface LeoSatelliteParticle {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  size: number
+  alpha: number
+  glintPhase: number
+  glintSpeed: number
+  wobblePhase: number
+  wobbleSpeed: number
+  wobbleAmplitude: number
+}
+
 const TAU = Math.PI * 2
 const AMBIENT_COUNT = 96
 const FRAME_INTERVAL_MS = 1000 / 30
 const TRAIN_INTERVAL_MIN_MS = 28_000
 const TRAIN_INTERVAL_MAX_MS = 52_000
+const LEO_MIN_COUNT = 42
+const LEO_MAX_COUNT = 136
+const LEO_AREA_PER_PARTICLE_PX = 15_000
 const MAX_DPR = 2
 
 function randomBetween(min: number, max: number): number {
@@ -79,9 +95,8 @@ function createAmbientParticles(count: number, width: number, height: number): A
   })
 }
 
-function createTrainConfig(height: number): PendingTrain {
+function createTrainConfig(height: number): TrainConfig {
   return {
-    spawnAtMs: 0,
     angleRad: randomBetween(-0.14, 0.14),
     speedPxPerSecond: randomBetween(56, 72),
     spacingPx: randomBetween(8.2, 10.8),
@@ -90,9 +105,35 @@ function createTrainConfig(height: number): PendingTrain {
   }
 }
 
+function computeLeoCount(width: number, height: number): number {
+  return Math.round(clamp((width * height) / LEO_AREA_PER_PARTICLE_PX, LEO_MIN_COUNT, LEO_MAX_COUNT))
+}
+
+function createLeoSatellites(count: number, width: number, height: number): LeoSatelliteParticle[] {
+  const orbitalAngles = [-0.6, -0.42, -0.24, -0.06, 0.08, 0.22, 0.38, 0.54]
+  return Array.from({ length: count }, () => {
+    const bandAngle = orbitalAngles[Math.floor(Math.random() * orbitalAngles.length)] ?? 0
+    const angleRad = bandAngle + randomBetween(-0.1, 0.1)
+    const speed = randomBetween(22, 44)
+    return {
+      x: randomBetween(0, width),
+      y: randomBetween(0, height),
+      vx: Math.cos(angleRad) * speed,
+      vy: Math.sin(angleRad) * speed,
+      size: randomBetween(0.62, 1.22),
+      alpha: randomBetween(0.08, 0.24),
+      glintPhase: randomBetween(0, TAU),
+      glintSpeed: randomBetween(1.1, 3.6),
+      wobblePhase: randomBetween(0, TAU),
+      wobbleSpeed: randomBetween(0.4, 1.2),
+      wobbleAmplitude: randomBetween(2.2, 4.8),
+    }
+  })
+}
+
 function pushTrainParticles(
   particles: TrainParticle[],
-  config: PendingTrain,
+  config: TrainConfig,
   width: number,
   nowMs: number,
 ): void {
@@ -139,8 +180,8 @@ export function SkySatelliteCanvas() {
     let height = 1
     let devicePixelRatio = 1
     let ambient = createAmbientParticles(AMBIENT_COUNT, width, height)
+    let leoSatellites = createLeoSatellites(computeLeoCount(width, height), width, height)
     const trains: TrainParticle[] = []
-    const pendingTrains: PendingTrain[] = []
 
     const resizeCanvas = () => {
       const rect = canvas.getBoundingClientRect()
@@ -151,8 +192,8 @@ export function SkySatelliteCanvas() {
       canvas.height = Math.max(1, Math.round(height * devicePixelRatio))
       context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0)
       ambient = createAmbientParticles(AMBIENT_COUNT, width, height)
+      leoSatellites = createLeoSatellites(computeLeoCount(width, height), width, height)
       trains.length = 0
-      pendingTrains.length = 0
     }
 
     resizeCanvas()
@@ -170,28 +211,7 @@ export function SkySatelliteCanvas() {
       if (nowMs >= nextPrimaryTrainAtMs) {
         const primary = createTrainConfig(height)
         pushTrainParticles(trains, primary, width, nowMs)
-
-        if (Math.random() < 0.7) {
-          const secondaryOffset = randomBetween(10, 22)
-          const secondary = {
-            ...primary,
-            spawnAtMs: nowMs + randomBetween(900, 1600),
-            leadY: clamp(primary.leadY + secondaryOffset * (Math.random() < 0.5 ? -1 : 1), height * 0.15, height * 0.85),
-            count: Math.max(14, primary.count - 2),
-          }
-          pendingTrains.push(secondary)
-        }
-
         nextPrimaryTrainAtMs = schedulePrimaryTrain(nowMs)
-      }
-
-      for (let index = pendingTrains.length - 1; index >= 0; index -= 1) {
-        const pending = pendingTrains[index]
-        if (!pending || nowMs < pending.spawnAtMs) {
-          continue
-        }
-        pushTrainParticles(trains, pending, width, nowMs)
-        pendingTrains.splice(index, 1)
       }
     }
 
@@ -205,6 +225,22 @@ export function SkySatelliteCanvas() {
         const twinkle = 0.76 + 0.24 * Math.sin(seconds * particle.twinkleSpeed + particle.twinklePhase)
         const alpha = particle.alpha * twinkle
         context.fillStyle = `rgba(232, 244, 255, ${alpha.toFixed(3)})`
+        context.beginPath()
+        context.arc(particle.x, particle.y, particle.size, 0, TAU)
+        context.fill()
+      }
+
+      for (const particle of leoSatellites) {
+        const rawGlint = 0.5 + 0.5 * Math.sin(seconds * particle.glintSpeed + particle.glintPhase)
+        const glint = 0.2 + rawGlint * rawGlint * 0.8
+        const alpha = particle.alpha * glint
+        const glowAlpha = alpha * 0.24
+        context.fillStyle = `rgba(200, 232, 255, ${glowAlpha.toFixed(3)})`
+        context.beginPath()
+        context.arc(particle.x, particle.y, particle.size * 1.8, 0, TAU)
+        context.fill()
+
+        context.fillStyle = `rgba(242, 250, 255, ${alpha.toFixed(3)})`
         context.beginPath()
         context.arc(particle.x, particle.y, particle.size, 0, TAU)
         context.fill()
@@ -262,6 +298,27 @@ export function SkySatelliteCanvas() {
       }
 
       const deltaSeconds = FRAME_INTERVAL_MS / 1000
+      for (const particle of leoSatellites) {
+        const wobbleX = Math.sin(seconds * particle.wobbleSpeed + particle.wobblePhase) * particle.wobbleAmplitude
+        const wobbleY = Math.cos(seconds * (particle.wobbleSpeed * 0.78) + particle.wobblePhase) * particle.wobbleAmplitude * 0.46
+        particle.x += (particle.vx + wobbleX) * deltaSeconds
+        particle.y += (particle.vy + wobbleY) * deltaSeconds
+
+        if (particle.x > width + wrapPadding) {
+          particle.x = -wrapPadding
+          particle.y = wrap(particle.y + randomBetween(-height * 0.2, height * 0.2), -wrapPadding, height + wrapPadding)
+        } else if (particle.x < -wrapPadding) {
+          particle.x = width + wrapPadding
+          particle.y = wrap(particle.y + randomBetween(-height * 0.2, height * 0.2), -wrapPadding, height + wrapPadding)
+        }
+
+        if (particle.y > height + wrapPadding) {
+          particle.y = -wrapPadding
+        } else if (particle.y < -wrapPadding) {
+          particle.y = height + wrapPadding
+        }
+      }
+
       for (const particle of trains) {
         particle.x += particle.vx * deltaSeconds
         particle.y += particle.vy * deltaSeconds
@@ -274,6 +331,12 @@ export function SkySatelliteCanvas() {
         context.fillStyle = "rgba(232, 244, 255, 0.34)"
         context.beginPath()
         context.arc(particle.x, particle.y, particle.size, 0, TAU)
+        context.fill()
+      }
+      for (const particle of leoSatellites) {
+        context.fillStyle = "rgba(240, 249, 255, 0.2)"
+        context.beginPath()
+        context.arc(particle.x, particle.y, particle.size * 0.9, 0, TAU)
         context.fill()
       }
     }
