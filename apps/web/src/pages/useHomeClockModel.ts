@@ -1,5 +1,6 @@
 import type React from "react"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { continuous } from "@number-flow/react"
 import { computeSky24h } from "../lib/same-sky/sky"
 import { computeOrbitLabelLayout } from "./orbit-label-layout"
 import type {
@@ -9,7 +10,7 @@ import type {
 
 type PersistedKind = "location" | "entity"
 
-export interface PersistedLocationApiResult {
+interface PersistedLocationApiResult {
   id: string
   name: string
   lat: number
@@ -194,16 +195,7 @@ export interface HomeClockViewModel {
   orbitLabelLayout: OrbitLabelLayout[]
   ringDiameter: number
   labelOrbitSizePx: number
-  savedLocations: PersistedLocationApiResult[]
-  hasLoadedSavedLocations: boolean
-  selectedId: string | null
-  reloadSavedLocations: () => Promise<void>
   setSelectedId: React.Dispatch<React.SetStateAction<string | null>>
-}
-
-export interface HomeClockModelOptions {
-  secondOrderEnabled?: boolean
-  visibleLocationIds?: readonly string[]
 }
 
 const STORAGE_SELECTED_ID = "same_sky_home_selected_item_id"
@@ -229,7 +221,7 @@ const DEFAULT_CONIC_GRADIENT_STOPS: ConicGradientStop[] = [
   { minute: DEFAULT_NOON_MINUTE, colorHex: "#081521", alpha: 0 },
   { minute: 1440, colorHex: "#081521", alpha: 0 },
 ]
-export const NUMBER_FLOW_PLUGINS: any[] = []
+export const NUMBER_FLOW_PLUGINS = [continuous]
 const CLIENT_BASELINE_FACTORS: SharedSkySecondOrderFactors = {
   altitude: 0,
   turbidity: 0.5,
@@ -607,7 +599,10 @@ export function createOrbitTransitionPlan(params: {
   const fromLayoutById = createLayoutMap(params.fromLayouts)
   const toLayoutById = createLayoutMap(params.toLayouts)
   const order = params.toLayouts.map((layout) => layout.id)
-  const sweepDirection = computeSweepDirectionFromRingRotations(params.fromRing.wheelRotationDeg, params.toRing.wheelRotationDeg)
+  const sweepDirection = computeSweepDirectionFromRingRotations(
+    params.fromRing.wheelRotationDeg,
+    params.toRing.wheelRotationDeg,
+  )
 
   return {
     startedAtMs: params.startedAtMs,
@@ -625,7 +620,10 @@ export function createOrbitTransitionPlan(params: {
   }
 }
 
-export function interpolateOrbitTransitionPlan(plan: OrbitTransitionPlan, progress: number): {
+export function interpolateOrbitTransitionPlan(
+  plan: OrbitTransitionPlan,
+  progress: number,
+): {
   wheelRotationDeg: number
   layout: OrbitLabelLayout[]
 } {
@@ -1153,7 +1151,10 @@ function sampleNormalizedConicGradientStopAtMinute(
   const next = normalizedStops[nextIndex]!
   const previous =
     nextIndex === 0
-      ? { ...normalizedStops[normalizedStops.length - 1]!, minute: normalizedStops[normalizedStops.length - 1]!.minute - 1440 }
+      ? {
+          ...normalizedStops[normalizedStops.length - 1]!,
+          minute: normalizedStops[normalizedStops.length - 1]!.minute - 1440,
+        }
       : normalizedStops[nextIndex - 1]!
 
   const span = next.minute - previous.minute
@@ -1381,26 +1382,13 @@ function measureGroupedLabelWidth(group: OrbitLabelGroup, isMobile: boolean): nu
   const footerRelativeDelta = formatDecimalOffsetHours(group.relativeOffsetMinutes)
   const footerOffsetLabel = group.isSelected ? "Now" : footerRelativeDelta
   const footerText = `${footerDateTime} · ${footerOffsetLabel}`
-  const metaWidth =
-    metaPadLeftPx +
-    measureTextWidth(footerText, metaFont) +
-    metaPadRightPx
+  const metaWidth = metaPadLeftPx + measureTextWidth(footerText, metaFont) + metaPadRightPx
 
   return Math.ceil(chipPadLeftPx + Math.max(widestEntityRow, metaWidth) + chipPadRightPx + safetyBufferPx)
 }
 
-export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeClockViewModel {
-  const secondOrderEnabled = options.secondOrderEnabled ?? false
-  const visibleLocationIdSet = useMemo(() => {
-    if (!options.visibleLocationIds) {
-      return null
-    }
-
-    return new Set(options.visibleLocationIds)
-  }, [options.visibleLocationIds])
-
+export function useHomeClockModel(): HomeClockViewModel {
   const [savedLocations, setSavedLocations] = useState<PersistedLocationApiResult[]>([])
-  const [hasLoadedSavedLocations, setHasLoadedSavedLocations] = useState<boolean>(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sky, setSky] = useState<Sky24hResult | null>(null)
   const [clockNowMs, setClockNowMs] = useState<number>(() => Date.now())
@@ -1425,7 +1413,9 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
   const pendingSelectionTransitionRef = useRef<boolean>(false)
   const pendingSecondOrderMorphRef = useRef<boolean>(false)
   const lastAnimatedGradientTokenRef = useRef<number>(0)
-  const displayedWheelGradientStopsRef = useRef<ConicGradientStop[]>(cloneConicGradientStops(DEFAULT_CONIC_GRADIENT_STOPS))
+  const displayedWheelGradientStopsRef = useRef<ConicGradientStop[]>(
+    cloneConicGradientStops(DEFAULT_CONIC_GRADIENT_STOPS),
+  )
   const gradientMorphRafRef = useRef<number | null>(null)
   const wheelBaseRotationRef = useRef<number | null>(null)
   const ringRotationDirectionRef = useRef<number>(0)
@@ -1443,16 +1433,8 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
   const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const localOffsetMinutes = -new Date(clockNowMs).getTimezoneOffset()
 
-  const visibleLocations = useMemo(() => {
-    if (!visibleLocationIdSet) {
-      return savedLocations
-    }
-
-    return savedLocations.filter((location) => visibleLocationIdSet.has(location.id))
-  }, [savedLocations, visibleLocationIdSet])
-
   const sortedLocations = useMemo(() => {
-    return [...visibleLocations].sort((left, right) => {
+    return [...savedLocations].sort((left, right) => {
       const leftOffset = left.timezone ? getTimeZoneOffsetMinutes(left.timezone, clockNowMs) : null
       const rightOffset = right.timezone ? getTimeZoneOffsetMinutes(right.timezone, clockNowMs) : null
 
@@ -1468,20 +1450,22 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
 
       return sortByLabel(left, right)
     })
-  }, [visibleLocations, clockNowMs, localOffsetMinutes])
+  }, [savedLocations, clockNowMs, localOffsetMinutes])
 
   const selectedLocation = useMemo(() => {
     if (!selectedId) {
       return null
     }
 
-    return visibleLocations.find((location) => location.id === selectedId) ?? null
-  }, [visibleLocations, selectedId])
+    return savedLocations.find((location) => location.id === selectedId) ?? null
+  }, [savedLocations, selectedId])
 
   const selectedTimezone = selectedLocation?.timezone ?? browserTimezone
   const selectedOffset = selectedTimezone ? getTimeZoneOffsetMinutes(selectedTimezone, clockNowMs) : localOffsetMinutes
   const safeSelectedOffset = selectedOffset ?? localOffsetMinutes
-  const [selectedOrbitAnchorDeg, setSelectedOrbitAnchorDeg] = useState<number>(() => toAngleFromTopDeg(safeSelectedOffset))
+  const [selectedOrbitAnchorDeg, setSelectedOrbitAnchorDeg] = useState<number>(() =>
+    toAngleFromTopDeg(safeSelectedOffset),
+  )
 
   const selectedCopyLabel = selectedLocation ? locationDisplayLabel(selectedLocation) : "your location"
   const centerTime = formatTimeInZone(selectedTimezone, clockNowMs)
@@ -1602,15 +1586,7 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
       })
       .filter(isNonNull)
       .sort((left, right) => left.angleDeg - right.angleDeg)
-  }, [
-    sortedLocations,
-    clockNowMs,
-    safeSelectedOffset,
-    selectedOrbitAnchorDeg,
-    selectedId,
-    localOffsetMinutes,
-    sky,
-  ])
+  }, [sortedLocations, clockNowMs, safeSelectedOffset, selectedOrbitAnchorDeg, selectedId, localOffsetMinutes, sky])
 
   const labelOrbitSizePx = useMemo(() => {
     if (!ringDiameter || !Number.isFinite(ringDiameter)) {
@@ -1743,7 +1719,8 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
     }
 
     const frozenNowMs = Date.now()
-    const sourceLayout = displayOrbitLabelLayoutRef.current.length > 0 ? displayOrbitLabelLayoutRef.current : orbitLabelLayout
+    const sourceLayout =
+      displayOrbitLabelLayoutRef.current.length > 0 ? displayOrbitLabelLayoutRef.current : orbitLabelLayout
     const toLayouts = orbitLabelLayout.map((layout) => cloneOrbitLabelLayout(layout))
     const fromRing = Number.isFinite(displayWheelRotationRef.current) ? displayWheelRotationRef.current : wheelRotation
     let toRing = wheelRotation
@@ -1834,7 +1811,15 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
     }
 
     orbitTransitionRafRef.current = window.requestAnimationFrame(tick)
-  }, [labelOrbitSizePx, orbitLabelLayout, selectedId, selectedLocation, selectedTimezone, selectedOrbitAnchorDeg, wheelRotation])
+  }, [
+    labelOrbitSizePx,
+    orbitLabelLayout,
+    selectedId,
+    selectedLocation,
+    selectedTimezone,
+    selectedOrbitAnchorDeg,
+    wheelRotation,
+  ])
 
   useEffect(() => {
     if (
@@ -1960,8 +1945,6 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setRingError(message)
-    } finally {
-      setHasLoadedSavedLocations(true)
     }
   }, [])
 
@@ -2095,13 +2078,13 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
   }, [])
 
   useEffect(() => {
-    if (selectedId && visibleLocations.some((location) => location.id === selectedId)) {
+    if (selectedId && savedLocations.some((location) => location.id === selectedId)) {
       return
     }
 
     const fallback = sortedLocations[0]?.id ?? null
     setSelectedId(fallback)
-  }, [selectedId, visibleLocations, sortedLocations])
+  }, [selectedId, savedLocations, sortedLocations])
 
   useEffect(() => {
     if (!selectedId) {
@@ -2132,7 +2115,7 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
         createClientBaselineEnvironment(previewTimezone),
         previewAtMs,
         {
-          applySecondOrder: secondOrderEnabled,
+          applySecondOrder: false,
         },
       )
 
@@ -2155,7 +2138,7 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
         const url = new URL("/api/location/sky-24h", window.location.origin)
         url.searchParams.set("lat", String(selectedLocation.lat))
         url.searchParams.set("long", String(selectedLocation.long))
-        url.searchParams.set("secondOrder", secondOrderEnabled ? "1" : "0")
+        url.searchParams.set("secondOrder", "0")
         if (atMs !== undefined) {
           url.searchParams.set("at", String(atMs))
         }
@@ -2197,7 +2180,7 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
       cancelled = true
       clearInterval(timer)
     }
-  }, [selectedLocation, browserTimezone, secondOrderEnabled])
+  }, [selectedLocation, browserTimezone])
 
   useEffect(() => {
     return () => {
@@ -2245,10 +2228,6 @@ export function useHomeClockModel(options: HomeClockModelOptions = {}): HomeCloc
     orbitLabelLayout: displayOrbitLabelLayout.length > 0 ? displayOrbitLabelLayout : orbitLabelLayout,
     ringDiameter,
     labelOrbitSizePx,
-    savedLocations,
-    hasLoadedSavedLocations,
-    selectedId,
-    reloadSavedLocations: loadSavedLocations,
     setSelectedId,
   }
 }
